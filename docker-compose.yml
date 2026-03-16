@@ -1,0 +1,105 @@
+# ── SRP SmartRecruit ATS v3.2 — Production Docker Compose ──────────────────
+# Server: Hetzner 5.223.67.236  |  Domain: recruit.srpailabs.com
+# App port: 127.0.0.1:8009:8000 (nginx reverse proxy)
+# DB: COMPLETELY ISOLATED — srp_ats_internal network only, no host port
+# Other projects (srp-marketing, mediflow, n8n) are NOT affected.
+#
+# Usage (on server):
+#   cd /opt/srp-ats
+#   docker compose pull
+#   docker compose up -d --build
+#   docker compose logs -f app
+
+services:
+
+  # ── PostgreSQL — ATS exclusive, no host port, isolated network ────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    container_name: srp-ats-db
+    environment:
+      POSTGRES_USER: srp_ats
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: srp_ats
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8"
+    command: >
+      postgres
+      -c shared_buffers=64MB
+      -c effective_cache_size=128MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=32MB
+      -c max_connections=20
+      -c wal_buffers=4MB
+      -c checkpoint_completion_target=0.9
+      -c log_min_duration_statement=1000
+      -c log_timezone=UTC
+      -c timezone=UTC
+    volumes:
+      - ats_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U srp_ats -d srp_ats"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - srp_ats_internal
+    # NO ports: block — postgres is internal only, never exposed to host
+    mem_limit: 160m
+    mem_reservation: 64m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── ATS FastAPI Application ───────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: srp-ats-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8009:8000"   # nginx proxies here; NOT open to the world
+    env_file: .env              # all secrets from .env on server
+    environment:
+      # Override DATABASE_URL to use internal Docker service name
+      DATABASE_URL: postgresql://srp_ats:${POSTGRES_PASSWORD}@db:5432/srp_ats
+      ENVIRONMENT: production
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ats_uploads:/app/uploads      # resume file storage
+      - ats_logs:/app/logs
+    networks:
+      - srp_ats_internal
+    mem_limit: 256m
+    mem_reservation: 96m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+# ── Isolated network — no cross-project access ──────────────────────────────
+networks:
+  srp_ats_internal:
+    driver: bridge
+    name: srp_ats_internal      # explicit name avoids dir-prefix conflicts
+
+# ── Named volumes — survive container restarts ───────────────────────────────
+volumes:
+  ats_postgres_data:
+    name: srp_ats_postgres_data
+  ats_uploads:
+    name: srp_ats_uploads
+  ats_logs:
+    name: srp_ats_logs

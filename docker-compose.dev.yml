@@ -1,0 +1,68 @@
+# ── SRP SmartRecruit ATS v3.2 — Local Development Docker Compose ───────────
+# Adds: exposed DB port 5434 for local DB tools (pgAdmin, DBeaver, psql)
+#       App on port 8767 (same port used in previous dev testing)
+#       Development environment flag
+#
+# Usage:
+#   # Start DB only (run app with uvicorn directly):
+#   docker compose -f docker-compose.dev.yml up db -d
+#
+#   # Start full stack in Docker:
+#   docker compose -f docker-compose.dev.yml up -d --build
+#
+#   # Connect via psql locally:
+#   psql -h localhost -p 5434 -U srp_ats -d srp_ats
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    container_name: srp-ats-db-dev
+    environment:
+      POSTGRES_USER: srp_ats
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ats_dev_password}
+      POSTGRES_DB: srp_ats
+    ports:
+      - "127.0.0.1:5435:5432"   # 5435 avoids conflict with native PG17 on 5432
+    volumes:
+      - ats_postgres_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U srp_ats -d srp_ats"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - srp_ats_dev
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: srp-ats-app-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8767:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://srp_ats:${POSTGRES_PASSWORD:-ats_dev_password}@db:5432/srp_ats
+      ENVIRONMENT: development
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads         # local folder — easy access during dev
+      - ./logs:/app/logs
+      # Hot reload: mount app code (comment out for production build testing)
+      # - ./app:/app/app
+    networks:
+      - srp_ats_dev
+
+networks:
+  srp_ats_dev:
+    driver: bridge
+
+volumes:
+  ats_postgres_data_dev:
+    name: srp_ats_postgres_data_dev

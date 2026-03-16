@@ -1,0 +1,74 @@
+# ── Secrets & local config — NEVER in image ──────────────────────────────
+.env
+.env.*
+!.env.production.template
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# ── Virtual environment ───────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Database files — use Docker volumes instead ───────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Logs ──────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Uploads — use Docker volumes instead ─────────────────────────────────
+uploads/
+
+# ── Git ───────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── Dev & test files ──────────────────────────────────────────────────────
+*.md
+test_*.py
+check_*.py
+debug_*.py
+edge_case_tests.py
+comprehensive_test_suite.py
+final_verification.py
+quick_test_fixes.py
+setup_demo_user.py
+setup_all_accounts.py
+create_admin.py
+CREATE_DEMO_ACCOUNT.py
+find_db.py
+list_tables.py
+*.bat
+*.ps1
+*.txt
+!requirements.production.txt
+!"System prompts ALL.txt"
+
+# ── IDE & OS ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── CI/CD ─────────────────────────────────────────────────────────────────
+.github/
+
+# ── Old requirements (use requirements.production.txt) ────────────────────
+requirements.txt
+requirements_v3.2.txt

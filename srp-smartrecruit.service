@@ -1,0 +1,40 @@
+[Unit]
+Description=SRP SmartRecruit v3.2 - FastAPI ATS
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/srp-smartrecruit
+
+# Load environment variables
+EnvironmentFile=/opt/srp-smartrecruit/.env
+
+# Use gunicorn with uvicorn worker for production
+ExecStart=/opt/srp-smartrecruit/.venv/bin/gunicorn \
+    -c /opt/srp-smartrecruit/gunicorn.conf.py \
+    app.main:app
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Resource limits
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/srp-smartrecruit/uploads /opt/srp-smartrecruit/logs
+
+# Logging
+StandardOutput=append:/opt/srp-smartrecruit/logs/app.log
+StandardError=append:/opt/srp-smartrecruit/logs/error.log
+
+[Install]
+WantedBy=multi-user.target

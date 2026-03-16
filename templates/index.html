@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recruitment AI - Professional Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1f2937;
+            --light: #f9fafb;
+            --gray: #6b7280;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: var(--dark);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        header {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            border-left: 5px solid var(--primary);
+        }
+
+        h1 {
+            font-size: 36px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: var(--gray);
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .status-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--light);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .status-badge {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--success);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e5e7eb;
+            background: white;
+            border-radius: 12px 12px 0 0;
+            padding: 0 20px;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            padding: 16px 24px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--gray);
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-btn:hover {
+            color: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Card */
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            border-color: var(--primary);
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--dark);
+        }
+
+        .card-icon {
+            font-size: 24px;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--dark);
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="file"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            background: white;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        /* File Upload */
+        .file-upload {
+            position: relative;
+            margin-bottom: 18px;
+        }
+
+        .file-upload input[type="file"] {
+            display: none;
+        }
+
+        .file-label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px;
+            border: 2px dashed #d1d5db;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--light);
+            text-align: center;
+        }
+
+        .file-label:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.02);
+        }
+
+        .file-label.active {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+            box-shadow: inset 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .file-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .file-text {
+            font-size: 13px;
+            color: var(--gray);
+        }
+
+        .file-hint {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
+
+        /* Button */
+        button {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(99, 102, 241, 0.3);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        button.secondary {
+            background: var(--light);
+            color: var(--dark);
+            border: 1.5px solid #d1d5db;
+        }
+
+        button.secondary:hover {
+            background: #f3f4f6;
+            border-color: #9ca3af;
+        }
+
+        /* Messages */
+        .alert {
+            padding: 16px 18px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            border-left: 4px solid;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .alert-success {
+            background: #ecfdf5;
+            border-color: var(--success);
+            color: #047857;
+        }
+
+        .alert-error {
+            background: #fef2f2;
+            border-color: var(--danger);
+            color: #991b1b;
+        }
+
+        .alert-warning {
+            background: #fffbeb;
+            border-color: var(--warning);
+            color: #92400e;
+        }
+
+        .alert-info {
+            background: #eff6ff;
+            border-color: var(--primary);
+            color: #1e40af;
+        }
+
+        .alert-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        /* Results */
+        .results-section {
+            margin-top: 24px;
+            padding: 20px;
+            background: var(--light);
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+            border-left: 4px solid var(--primary);
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Activity Log */
+        .log-section {
+            background: var(--dark);
+            color: #10b981;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 500px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        .log-line {
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .log-time {
+            color: #9ca3af;
+        }
+
+        .log-success {
+            color: #10b981;
+        }
+
+        .log-error {
+            color: #ef4444;
+        }
+
+        .log-warning {
+            color: #f59e0b;
+        }
+
+        /* Bulk Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--light) 0%, white 100%);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--gray);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--light);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+
+        footer {
+            text-align: center;
+            color: var(--gray);
+            font-size: 13px;
+            margin-top: 40px;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🎯 Recruitment AI System</h1>
+            <p class="subtitle">Advanced AI-powered candidate screening & bulk processing</p>
+            <div class="status-row">
+                <div class="status-item"><div class="status-badge"></div> System Running</div>
+                <div class="status-item"><div class="status-badge"></div> n8n Webhook Active</div>
+                <div class="status-item"><div class="status-badge"></div> Bulk Processing Ready</div>
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('single')">Single Screening</button>
+            <button class="tab-btn" onclick="switchTab('bulk')">Bulk Screening</button>
+            <button class="tab-btn" onclick="switchTab('messages')">Generate Messages</button>
+            <button class="tab-btn" onclick="switchTab('logs')">Activity Logs</button>
+        </div>
+
+        <!-- Single Screening Tab -->
+        <div id="single" class="tab-content active">
+            <div class="grid">
+                <!-- Resume Upload & Entry -->
+                <div class="card">
+                    <div class="card-title"><span class="card-icon">📄</span>Candidate Resume</div>
+                    
+                    <div class="form-group">
+                        <label>Upload Resume (PDF, DOC, DOCX)</label>
+                        <div class="file-upload">
+                            <input type="file" id="resumeFile" accept=".pdf,.doc,.docx,.txt">
+                            <label class="file-label" for="resumeFile">
+                                <div class="file-icon">📤</div>
+                                <div class="file-text">Click to upload or drag & drop</div>
+                                <div class="file-hint">PDF, DOC, DOCX, TXT (max 50MB)</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Candidate Name</label>
+                        <input type="text" id="candName" placeholder="John Doe">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Resume Text (or paste below)</label>
+                        <textarea id="candResume" placeholder="Resume content will appear here after upload or paste..."></textarea>
+                    </div>
+
+                    <button onclick="screenSingle()"><span class="spinner" id="singleSpinner" style="display:none;"></span>🚀 Screen Candidate</button>
+                    <div id="singleResults"></div>
+                </div>
+
+                <!-- Job Requirements -->
+                <div class="card">
+                    <div class="card-title"><span class="card-icon">💼</span>Job Requirements</div>
+                    
+                    <div class="form-group">
+                        <label>Upload JD (PDF, DOC, DOCX)</label>
+                        <div class="file-upload">
+                            <input type="file" id="jdFile" accept=".pdf,.doc,.docx,.txt">
+                            <label class="file-label" for="jdFile">
+                                <div class="file-icon">📤</div>
+                                <div class="file-text">Click to upload or drag & drop</div>
+                                <div class="file-hint">PDF, DOC, DOCX, TXT (max 50MB)</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Job Title</label>
+                        <input type="text" id="jobTitle" placeholder="Senior Backend Engineer">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Job Description</label>
+                        <textarea id="jobDesc" placeholder="Job description or paste JD..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bulk Screening Tab -->
+        <div id="bulk" class="tab-content">
+            <div class="grid">
+                <!-- CSV Upload -->
+                <div class="card">
+                    <div class="card-title"><span class="card-icon">📊</span>Candidates CSV</div>
+                    
+                    <div class="form-group">
+                        <label>Upload CSV File</label>
+                        <div class="file-upload">
+                            <input type="file" id="csvFile" accept=".csv">
+                            <label class="file-label" for="csvFile">
+                                <div class="file-icon">📤</div>
+                                <div class="file-text">Click to upload CSV</div>
+                                <div class="file-hint">Columns: name, resume (or candidate_name, cv)</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="csvPreview"></div>
+                    <button onclick="bulkScreen()" id="bulkBtn"><span class="spinner" id="bulkSpinner" style="display:none;"></span>⚡ Process Candidates</button>
+                    <div id="bulkResults"></div>
+                </div>
+
+                <!-- Job Description for Bulk -->
+                <div class="card">
+                    <div class="card-title"><span class="card-icon">💼</span>Job Description</div>
+                    
+                    <div class="form-group">
+                        <label>Upload JD (PDF, DOC, DOCX)</label>
+                        <div class="file-upload">
+                            <input type="file" id="bulkJdFile" accept=".pdf,.doc,.docx,.txt">
+                            <label class="file-label" for="bulkJdFile">
+                                <div class="file-icon">📤</div>
+                                <div class="file-text">Click to upload</div>
+                                <div class="file-hint">PDF, DOC, DOCX, TXT</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Job Title</label>
+                        <input type="text" id="bulkJobTitle" placeholder="Senior Backend Engineer">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Job Description</label>
+                        <textarea id="bulkJobDesc" placeholder="Paste job description..."></textarea>
+                    </div>
+
+                    <div id="bulkStats" class="stats-grid" style="display:none;">
+                        <div class="stat-card">
+                            <div class="stat-number" id="totalStat">0</div>
+                            <div class="stat-label">Total</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="processedStat">0</div>
+                            <div class="stat-label">Processed</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="skippedStat">0</div>
+                            <div class="stat-label">Skipped</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="errorsStat">0</div>
+                            <div class="stat-label">Errors</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages Tab -->
+        <div id="messages" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <div class="card-title"><span class="card-icon">📧</span>Generate Message</div>
+                    
+                    <div class="form-group">
+                        <label>Message Type</label>
+                        <select id="msgType">
+                            <option>Interview Invitation</option>
+                            <option>Rejection</option>
+                            <option>Job Offer</option>
+                            <option>Follow-up</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Recipient Name</label>
+                        <input type="text" id="msgName" placeholder="John Doe">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Recipient Email</label>
+                        <input type="email" id="msgEmail" placeholder="john@example.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Job Title</label>
+                        <input type="text" id="msgJob" placeholder="Senior Backend Engineer">
+                    </div>
+
+                    <button onclick="generateMsg()"><span class="spinner" id="msgSpinner" style="display:none;"></span>✉️ Generate Message</button>
+                    <div id="msgResults"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="logs" class="tab-content">
+            <div class="card">
+                <div class="card-title"><span class="card-icon">📋</span>Activity Logs</div>
+                <button class="secondary" onclick="refreshLogs()" style="width:150px; margin-bottom:15px;">🔄 Refresh Logs</button>
+                <div class="log-section" id="logContent">
+                    <div class="log-line"><span class="log-time">[Loading...]</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>Recruitment AI System v2.0 | Bulk Processing | PDF/DOC Support | n8n Integration</p>
+            <p>© 2026 - Advanced Recruitment Automation</p>
+        </footer>
+    </div>
+
+    <script>
+        // Tab switching
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tab).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // File upload handlers
+        setupFileUpload('resumeFile', 'candResume');
+        setupFileUpload('jdFile', 'jobDesc');
+        setupFileUpload('bulkJdFile', 'bulkJobDesc');
+        setupCsvUpload('csvFile');
+
+        function setupFileUpload(inputId, textareaId) {
+            const input = document.getElementById(inputId);
+            const label = input.parentElement;
+            
+            input.addEventListener('change', () => uploadFile(input, textareaId));
+            
+            label.addEventListener('dragover', e => {
+                e.preventDefault();
+                label.classList.add('active');
+            });
+            label.addEventListener('dragleave', () => label.classList.remove('active'));
+            label.addEventListener('drop', e => {
+                e.preventDefault();
+                input.files = e.dataTransfer.files;
+                uploadFile(input, textareaId);
+            });
+        }
+
+        function setupCsvUpload(inputId) {
+            const input = document.getElementById(inputId);
+            const label = input.parentElement;
+            
+            input.addEventListener('change', () => uploadCsvFile(input));
+            
+            label.addEventListener('dragover', e => {
+                e.preventDefault();
+                label.classList.add('active');
+            });
+            label.addEventListener('dragleave', () => label.classList.remove('active'));
+            label.addEventListener('drop', e => {
+                e.preventDefault();
+                input.files = e.dataTransfer.files;
+                uploadCsvFile(input);
+            });
+        }
+
+        async function uploadFile(input, textareaId) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/upload-file', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById(textareaId).value = data.content;
+                    showAlert(`✓ ${data.file_type.toUpperCase()} loaded (${data.size} chars)`, 'success');
+                } else {
+                    showAlert(`❌ ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showAlert(`❌ Upload failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function uploadCsvFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/upload-file', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('csvFile').dataset.content = data.content;
+                    document.getElementById('csvPreview').innerHTML = `<div class="alert alert-success"><span class="alert-icon">✓</span>CSV loaded: ${data.filename}</div>`;
+                }
+            } catch (error) {
+                showAlert(`❌ CSV upload failed`, 'error');
+            }
+        }
+
+        async function screenSingle() {
+            const name = document.getElementById('candName').value;
+            const resume = document.getElementById('candResume').value;
+            const jobTitle = document.getElementById('jobTitle').value;
+            const jobDesc = document.getElementById('jobDesc').value;
+
+            if (!all([name, resume, jobTitle, jobDesc])) {
+                showAlert('❌ Please fill all fields', 'error');
+                return;
+            }
+
+            showSpinner('singleSpinner');
+            try {
+                const response = await fetch('/api/screen-candidate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ candidate_name: name, resume, job_title: jobTitle, job_description: jobDesc })
+                });
+
+                const data = await response.json();
+                displayResults(data, 'singleResults');
+            } finally {
+                hideSpinner('singleSpinner');
+            }
+        }
+
+        async function bulkScreen() {
+            const csv = document.getElementById('csvFile').dataset.content;
+            const jobDesc = document.getElementById('bulkJobDesc').value;
+            const jobTitle = document.getElementById('bulkJobTitle').value;
+
+            if (!all([csv, jobDesc, jobTitle])) {
+                showAlert('❌ Please upload CSV and enter JD', 'error');
+                return;
+            }
+
+            showSpinner('bulkSpinner');
+            try {
+                const response = await fetch('/api/bulk-screen', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ csv_content: csv, job_description: jobDesc, job_title: jobTitle })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('totalStat').textContent = data.total;
+                    document.getElementById('processedStat').textContent = data.processed;
+                    document.getElementById('skippedStat').textContent = data.skipped;
+                    document.getElementById('errorsStat').textContent = data.errors;
+                    document.getElementById('bulkStats').style.display = 'grid';
+                }
+                displayResults(data, 'bulkResults');
+            } finally {
+                hideSpinner('bulkSpinner');
+            }
+        }
+
+        async function generateMsg() {
+            const type = document.getElementById('msgType').value.toLowerCase();
+            const name = document.getElementById('msgName').value;
+            const email = document.getElementById('msgEmail').value;
+            const job = document.getElementById('msgJob').value;
+
+            if (!all([name, email, job])) {
+                showAlert('❌ Please fill all fields', 'error');
+                return;
+            }
+
+            showSpinner('msgSpinner');
+            try {
+                const response = await fetch('/api/generate-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message_type: type, recipient_name: name, recipient_email: email, job_title: job })
+                });
+
+                const data = await response.json();
+                displayResults(data, 'msgResults');
+            } finally {
+                hideSpinner('msgSpinner');
+            }
+        }
+
+        async function refreshLogs() {
+            try {
+                const response = await fetch('/api/logs');
+                const data = await response.json();
+                const html = data.logs.map(line => `<div class="log-line">${escapeHtml(line)}</div>`).join('');
+                document.getElementById('logContent').innerHTML = html || '<div class="log-line log-warning">No logs yet</div>';
+            } catch (error) {
+                console.error('Log fetch error:', error);
+            }
+        }
+
+        function displayResults(data, elementId) {
+            const element = document.getElementById(elementId);
+            const cls = data.success ? 'alert-success' : 'alert-error';
+            const icon = data.success ? '✓' : '✗';
+            element.innerHTML = `<div class="alert ${cls}"><span class="alert-icon">${icon}</span><div><strong>${data.success ? 'Success' : 'Error'}</strong><br>${JSON.stringify(data, null, 2)}</div></div>`;
+        }
+
+        function showAlert(msg, type) {
+            const div = document.createElement('div');
+            div.className = `alert alert-${type}`;
+            div.innerHTML = `<span class="alert-icon">${msg[0]}</span><div>${msg}</div>`;
+            document.body.insertBefore(div, document.querySelector('header').nextSibling);
+            setTimeout(() => div.remove(), 5000);
+        }
+
+        function showSpinner(id) {
+            document.getElementById(id).style.display = 'inline-block';
+        }
+
+        function hideSpinner(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        function all(arr) {
+            return arr.every(x => x);
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        }
+
+        // Initialize
+        refreshLogs();
+        setInterval(refreshLogs, 10000);
+    </script>
+</body>
+</html>

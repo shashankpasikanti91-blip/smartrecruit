@@ -1,0 +1,20 @@
+
+JOHN SMITH
+Software Engineer
+
+EXPERIENCE:
+Senior Developer at Tech Corp (2020-2024) 
+- Developed web applications using Python and React
+- Led team of 5 developers
+- Built RESTful APIs and microservices
+
+EDUCATION:
+Bachelor of Computer Science
+State University (2016-2020)
+
+SKILLS:
+Python, JavaScript, React, Node.js, SQL, Docker, AWS
+
+CONTACT:
+Email: john.smith@email.com
+Phone: +1-555-0123
