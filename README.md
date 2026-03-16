@@ -1,19 +1,205 @@
-# 🚀 Recruitment AI Automation System
+# SRP SmartRecruit — AI-Powered ATS v3.2
 
-Production-ready modular Python architecture for complete AI-powered recruitment automation.
+**Live:** https://recruit.srpailabs.com  
+**GitHub:** https://github.com/shashankpasikanti91-blip/smartrecruit
 
-## 📋 Features
+AI-powered Applicant Tracking System built with FastAPI + PostgreSQL. Screen candidates, post jobs, and automate your hiring pipeline.
 
-- **Resume Screening**: AI-powered candidate matching against job descriptions
-- **Job Description Processing**: Automated JD analysis and multi-platform posting
-- **Semantic Matching**: Embeddings-based similarity matching
-- **Messaging Agent**: AI-generated recruitment communications (email, WhatsApp, LinkedIn)
-- **Interview Management**: Interview scheduling and feedback tracking
-- **Candidate Tracking**: Complete candidate lifecycle management
-- **Database Integration**: Supabase with vector embeddings support
-- **Google Drive Integration**: JD and resume loading
-- **n8n Orchestration**: Workflow automation and integration
-- **Control Panel Integration**: JSON-based n8n form configuration
+---
+
+## Features
+
+- **Resume Screening** — AI scores candidates against job descriptions (0–100)
+- **Bulk Screening** — Upload multiple resumes, rank all at once
+- **Job Post Generator** — AI writes job descriptions for 9+ platforms
+- **AI Writing Assistant** — Improve emails, messages, and JDs
+- **Support Tickets** — Internal helpdesk for recruitment issues
+- **JWT Auth** — Secure login with OTP email verification
+- **Activity Log** — Track every action (logins, uploads, screenings, tickets) per user
+- **Landing Page** — Marketing page at `/`, dashboard at `/app`
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| API | FastAPI 0.129, Python 3.11 |
+| Database | PostgreSQL 16 (Docker) |
+| ORM | SQLAlchemy 2.0 |
+| AI | pydantic-ai, OpenAI GPT |
+| Auth | python-jose (JWT), bcrypt |
+| Server | gunicorn + uvicorn workers |
+| Reverse Proxy | nginx + Let's Encrypt SSL |
+| Container | Docker + docker-compose |
+
+---
+
+## Quick Start (Local Dev)
+
+### 1. Prerequisites
+- Python 3.11+
+- PostgreSQL running locally
+- Docker (optional, for containerised DB)
+
+### 2. Setup
+
+```bash
+# Clone
+git clone https://github.com/shashankpasikanti91-blip/smartrecruit.git
+cd smartrecruit
+
+# Create virtual environment
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # Linux/Mac
+
+# Install dependencies
+pip install -r requirements.production.txt
+
+# Copy and configure environment
+cp .env.production.template .env
+# Edit .env — set DATABASE_URL, SECRET_KEY, OPENAI_API_KEY
+```
+
+### 3. Setup local PostgreSQL database
+
+```bash
+# Creates srp_ats user + database in your local PostgreSQL
+python setup_local_db.py
+```
+
+> This creates `srp_ats` user and `srp_ats` database. Your `.env` default:
+> `DATABASE_URL=postgresql://srp_ats:ats_dev_password@localhost:5432/srp_ats`
+
+### 4. Run the app
+
+```bash
+uvicorn app.main:app --port 8767 --reload
+```
+
+Open: http://localhost:8767 (landing page) | http://localhost:8767/app (dashboard) | http://localhost:8767/docs (API)
+
+---
+
+## Docker (Full Stack)
+
+```bash
+# Development (postgres exposed on port 5435 for DB tools)
+docker compose -f docker-compose.dev.yml up -d --build
+
+# Production (matches server setup)
+docker compose up -d --build
+```
+
+---
+
+## Production Deployment (Hetzner + Cloudflare)
+
+### Server: `5.223.67.236` | Domain: `recruit.srpailabs.com`
+
+```bash
+# On server
+mkdir -p /opt/srp-ats && cd /opt/srp-ats
+
+# Copy your code
+scp -r ./* root@5.223.67.236:/opt/srp-ats/
+
+# Create .env from template (fill in real values)
+cp .env.production.template .env
+nano .env   # set POSTGRES_PASSWORD, SECRET_KEY, OPENAI_API_KEY, CORS_ORIGINS
+
+# Build and start
+docker compose up -d --build
+
+# Check logs
+docker compose logs -f app
+```
+
+### nginx + SSL (already configured on server)
+- Config: `/etc/nginx/sites-available/recruit.srpailabs.com`
+- SSL: Let's Encrypt via certbot (auto-renews)
+- Port: app runs on `127.0.0.1:8009`, nginx proxies to HTTPS
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | YES | PostgreSQL connection URL |
+| `POSTGRES_PASSWORD` | YES | PostgreSQL container password |
+| `SECRET_KEY` | YES | JWT signing key (use `python -c "import secrets; print(secrets.token_hex(32))"`) |
+| `OPENAI_API_KEY` | YES | OpenAI API key for AI features |
+| `ENVIRONMENT` | YES | `production` or `development` |
+| `CORS_ORIGINS` | prod | `https://recruit.srpailabs.com` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | no | default 1440 (24h) |
+
+See [`.env.production.template`](.env.production.template) for all variables.
+
+---
+
+## API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health` | Health check + DB status |
+| POST | `/api/auth/register` | Register new user |
+| POST | `/api/auth/verify-otp` | Verify email OTP |
+| POST | `/api/auth/login` | Login, get JWT |
+| GET | `/api/auth/me` | Current user info |
+| POST | `/api/resume/upload` | Upload resume (PDF/DOCX) |
+| POST | `/api/screening/screen` | Screen candidate vs job |
+| POST | `/api/screening/bulk` | Bulk screen multiple resumes |
+| POST | `/api/ai/writing-assist` | AI writing improvement |
+| POST | `/api/support/ticket` | Create support ticket |
+
+Full API docs: https://recruit.srpailabs.com/docs
+
+---
+
+## Activity Log
+
+The **Activity Log** (visible in the dashboard sidebar) tracks every significant action in the system:
+
+- User logins and logouts
+- Resume uploads
+- Candidate screenings (single + bulk)
+- Job post generations
+- Support ticket creation
+- AI writing requests
+
+This gives HR teams a full audit trail — who did what, and when. Useful for compliance, debugging, and team oversight.
+
+---
+
+## Database Schema
+
+7 tables auto-created on startup:
+- `users` — accounts with OTP and subscription
+- `sessions` — active JWT sessions (single-session enforcement)
+- `resumes` — uploaded resume metadata + extracted text
+- `job_screenings` — screening results with AI scores
+- `job_posts` — generated job descriptions
+- `support_tickets` — helpdesk tickets
+- `activity_logs` — audit trail of all user actions
+
+---
+
+## Security
+
+- JWT tokens signed with `HS256`, expire in 24h
+- Single session per user (new login invalidates old token)
+- OTP hidden in responses when `ENVIRONMENT=production`
+- CORS locked to `CORS_ORIGINS` env var in production
+- PostgreSQL not exposed to host network in production Docker
+- `.env` excluded from git via `.gitignore`
+
+---
+
+## License
+
+Private — SRP AI Labs © 2026
 
 ## 🏗️ Architecture
 

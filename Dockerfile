@@ -31,7 +31,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY app/           ./app/
 COPY templates/     ./templates/
 COPY static/        ./static/
-COPY System\ prompts\ ALL.txt ./System prompts ALL.txt
+COPY system_prompts.txt ./system_prompts.txt
+# Backward-compat symlink so old relative path still works
+RUN ln -s /app/system_prompts.txt "/app/System prompts ALL.txt"
 
 # Create writable directories
 RUN mkdir -p uploads/resumes logs && \

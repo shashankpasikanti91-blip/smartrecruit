@@ -58,12 +58,15 @@ def log_activity(db: Session, user_id: Optional[int], action: str, details: dict
         # Don't fail the main operation if logging fails
 
 def load_system_prompts():
-    """Load all system prompts from System prompts ALL.txt"""
+    """Load all system prompts from system_prompts.txt (or legacy 'System prompts ALL.txt')"""
     global SYSTEM_PROMPTS
-    prompts_file = Path("System prompts ALL.txt")
-    
-    if not prompts_file.exists():
-        print("✗ System prompts ALL.txt not found!")
+    # Try new Docker-safe filename first, fall back to legacy name
+    for candidate in [Path("system_prompts.txt"), Path("System prompts ALL.txt")]:
+        if candidate.exists():
+            prompts_file = candidate
+            break
+    else:
+        print("✗ system_prompts.txt not found!")
         return
     
     try:
