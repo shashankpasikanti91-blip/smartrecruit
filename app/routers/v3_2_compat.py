@@ -39,8 +39,8 @@ def log_activity(db: Session, user_id: Optional[int], action: str, details: dict
         from app.models.screening import ScreeningResult
         
         log_entry = ScreeningResult(
-            user_id=user_id or 1,  # Default to user 1 if no user
-            resume_id=1,  # Dummy resume ID for compatibility
+            user_id=user_id,  # None is OK — column is nullable
+            resume_id=None,   # No FK reference needed for activity logs
             job_description=f"Activity: {action}",
             score=0.0,
             status="logged",
@@ -405,14 +405,30 @@ Candidate Resume:
                 "strengths": evaluation.get('candidate_strengths', [])  # For template compatibility
             }
             
-            # Log activity to database
-            log_activity(db, current_user.id if current_user else None, "single_screening", {
-                "candidate_name": request.candidate_name,
-                "job_title": request.job_title,
-                "score": score,
-                "recommendation": recommendation,
-                "timestamp": datetime.now().isoformat()
-            })
+            # Save actual screening result to database
+            try:
+                screen_record = ScreeningResult(
+                    user_id=current_user.id if current_user else None,
+                    resume_id=None,
+                    job_description=request.jd_text[:1000],
+                    score=float(score),
+                    status="completed",
+                    ai_analysis={
+                        "candidate_name": request.candidate_name,
+                        "job_title": request.job_title,
+                        "email": result.get('email', ''),
+                    },
+                    strengths=evaluation.get('candidate_strengths', []),
+                    concerns=evaluation.get('candidate_weaknesses', []),
+                    recommendation=recommendation,
+                    is_eligible_for_invite=(score >= 75)
+                )
+                db.add(screen_record)
+                db.commit()
+                print(f"✅ Screening result saved: {request.candidate_name} {score}% {recommendation}")
+            except Exception as db_err:
+                db.rollback()
+                print(f"⚠️ Could not save screening result: {db_err}")
             
             return {"status": "success", "data": frontend_response}
             
@@ -631,11 +647,11 @@ Candidates to Screen:{candidates_text}
                     # Create screening result record
                     screening_result = ScreeningResult(
                         user_id=current_user.id if current_user else None,
-                        resume_id=1,  # Placeholder - in production would link to actual resume
+                        resume_id=None,
                         job_description=request.jd_text[:500] if request.jd_text else "",
                         score=match_score,
                         status="completed",
-                        ai_analysis=result.get('evaluation', result.get('assessment', {})),
+                        ai_analysis={"candidate_name": candidate_name, "job_title": request.job_title, "details": result.get('evaluation', result.get('assessment', {}))},
                         strengths=result.get('evaluation', {}).get('candidate_strengths', []) if isinstance(result.get('evaluation'), dict) else [],
                         concerns=result.get('evaluation', {}).get('candidate_weaknesses', []) if isinstance(result.get('evaluation'), dict) else [],
                         recommendation=recommendation.upper() if recommendation else "REVIEW",
@@ -703,11 +719,11 @@ Candidates to Screen:{candidates_text}
                         
                         screening_result = ScreeningResult(
                             user_id=current_user.id if current_user else None,
-                            resume_id=1,
+                            resume_id=None,
                             job_description=request.jd_text[:500] if request.jd_text else "",
                             score=match_score,
                             status="completed",
-                            ai_analysis=result.get('evaluation', {}),
+                            ai_analysis={"candidate_name": candidate_name, "job_title": request.job_title},
                             strengths=result.get('evaluation', {}).get('candidate_strengths', []) if isinstance(result.get('evaluation'), dict) else [],
                             concerns=result.get('evaluation', {}).get('candidate_weaknesses', []) if isinstance(result.get('evaluation'), dict) else [],
                             recommendation=recommendation.upper() if recommendation else "INVITE",
@@ -1361,15 +1377,21 @@ async def get_logs(db: Session = Depends(get_db)):
     try:
         logs = []
         
-        # Get recent screening results from database (ORM method)
+        # Get recent REAL screening results only (skip activity log entries with status='logged')
         try:
-            screening_results = db.query(ScreeningResult).order_by(ScreeningResult.created_at.desc()).limit(50).all()
+            screening_results = db.query(ScreeningResult).filter(
+                ScreeningResult.status == "completed"
+            ).order_by(ScreeningResult.created_at.desc()).limit(50).all()
             if screening_results:
                 for result in screening_results:
                     timestamp = result.created_at.strftime('%Y-%m-%d %H:%M:%S') if result.created_at else 'N/A'
                     score = result.score if result.score else 0
                     recommendation = result.recommendation if result.recommendation else 'PENDING'
-                    logs.append(f"[{timestamp}] Screening Result #{result.id}: {score}% - {recommendation}")
+                    # Extract candidate name from ai_analysis JSON
+                    candidate_name = "Candidate"
+                    if result.ai_analysis and isinstance(result.ai_analysis, dict):
+                        candidate_name = result.ai_analysis.get('candidate_name', 'Candidate')
+                    logs.append(f"[{timestamp}] {candidate_name}: {score:.0f}% - {recommendation}")
                 print(f"✅ Loaded {len(logs)} screening results from database")
             else:
                 print("⚠️ No screening results in database yet")

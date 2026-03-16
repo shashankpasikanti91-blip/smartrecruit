@@ -35,6 +35,9 @@ COPY system_prompts.txt ./system_prompts.txt
 # Backward-compat symlink so old relative path still works
 RUN ln -s /app/system_prompts.txt "/app/System prompts ALL.txt"
 
+# Copy gunicorn configuration
+COPY gunicorn.conf.py ./
+
 # Create writable directories
 RUN mkdir -p uploads/resumes logs && \
     chown -R appuser:appuser /app

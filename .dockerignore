@@ -57,6 +57,7 @@ list_tables.py
 *.txt
 !requirements.production.txt
 !"System prompts ALL.txt"
+!system_prompts.txt
 
 # ── IDE & OS ──────────────────────────────────────────────────────────────
 .vscode/
