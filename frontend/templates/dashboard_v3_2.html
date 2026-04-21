@@ -1300,6 +1300,13 @@
                                 </div>
 
                                 <div class="form-group">
+                                    <label>Auto-fill JD from recent screenings</label>
+                                    <select id="bool_jd_picker" onchange="fillBoolFromCache()" style="width:100%;padding:8px 12px;border:1px solid var(--border,#e5e7eb);border-radius:6px;font-size:13px;color:var(--dark,#111);background:#fff;cursor:pointer;">
+                                        <option value="">— Pick a recently used JD —</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
                                     <label>Job Description (PDF, DOC, DOCX)</label>
                                     <div class="file-upload" ondrop="handleDrop(event, 'bool_jd_text')" ondragover="handleDragOver(event)">
                                         <input type="file" id="bool_jd_file" accept=".pdf,.doc,.docx,.txt" onchange="handleFileUpload(event, 'bool_jd_text')" style="display:none">
@@ -2046,6 +2053,14 @@
                 return;
             }
 
+            // Cache JD in localStorage for reuse in Boolean Search
+            try {
+                const cached = JSON.parse(localStorage.getItem('srp_jd_cache') || '[]');
+                const entry = { title: jobTitle, text: jd, ts: Date.now() };
+                const updated = [entry, ...cached.filter(e => e.title !== jobTitle)].slice(0, 5);
+                localStorage.setItem('srp_jd_cache', JSON.stringify(updated));
+            } catch(_) {}
+
             showAlert('[...] Screening...', 'info');
 
             fetchWithTimeout('/api/screen-candidate', {
@@ -2593,6 +2608,56 @@ Recruitment Team`;
         // ============================================================
         // PHASE 2 – BOOLEAN SEARCH GENERATOR
         // ============================================================
+
+        // Populate the JD picker from localStorage cache
+        function populateBoolJdPicker() {
+            try {
+                const cached = JSON.parse(localStorage.getItem('srp_jd_cache') || '[]');
+                const sel = document.getElementById('bool_jd_picker');
+                if (!sel) return;
+                // Clear existing options except placeholder
+                sel.innerHTML = '<option value="">— Pick a recently used JD —</option>';
+                cached.forEach((entry, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    const dt = new Date(entry.ts).toLocaleDateString();
+                    opt.textContent = `${entry.title} (${dt})`;
+                    sel.appendChild(opt);
+                });
+                if (cached.length === 0) {
+                    const opt = document.createElement('option');
+                    opt.disabled = true;
+                    opt.textContent = 'No cached JDs yet — use AI Screening first';
+                    sel.appendChild(opt);
+                }
+            } catch(_) {}
+        }
+
+        // Fill bool_jd_text from the selected cached JD
+        function fillBoolFromCache() {
+            try {
+                const sel = document.getElementById('bool_jd_picker');
+                const idx = sel.value;
+                if (idx === '') return;
+                const cached = JSON.parse(localStorage.getItem('srp_jd_cache') || '[]');
+                const entry = cached[parseInt(idx)];
+                if (!entry) return;
+                document.getElementById('bool_jd_text').value = entry.text;
+                if (!document.getElementById('bool_job_title').value) {
+                    document.getElementById('bool_job_title').value = entry.title;
+                }
+            } catch(_) {}
+        }
+
+        // Run populateBoolJdPicker when the Boolean tab is opened
+        (function() {
+            const orig = window.switchTab;
+            window.switchTab = function(tabId) {
+                if (typeof orig === 'function') orig(tabId);
+                if (tabId === 'boolean') populateBoolJdPicker();
+            };
+        })();
+
         function generateBooleanSearch() {
             const jdText = document.getElementById('bool_jd_text').value.trim();
             const jobTitle = document.getElementById('bool_job_title').value.trim();
