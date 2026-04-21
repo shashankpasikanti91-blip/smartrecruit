@@ -131,5 +131,40 @@ async def get_optional_user(
         
         user = db.query(User).filter(User.id == user_id).first()
         return user
-    except:
+    except Exception:
         return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v4.0 RBAC helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+_ROLE_HIERARCHY = {
+    "admin":  100,
+    "user":   50,
+    "viewer": 10,
+}
+
+
+def require_role(*roles: str):
+    """
+    Dependency factory — require the current user to have one of the given roles.
+
+    Usage:
+        @router.get("/admin-only")
+        async def admin_only(user: User = Depends(require_role("admin"))):
+            ...
+    """
+    async def _check(current_user: User = Depends(get_current_verified_user)) -> User:
+        if current_user.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This action requires role: {' or '.join(roles)}"
+            )
+        return current_user
+    return _check
+
+
+def require_admin():
+    """Shortcut — require admin role."""
+    return require_role("admin")

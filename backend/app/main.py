@@ -22,6 +22,14 @@ from app.database.connection import engine, Base, init_db
 
 #Import routers
 from app.routers import auth, screening, resume, support, ai_assistant, v3_2_compat
+from app.routers import (
+    jd_intelligence,
+    boolean_search as bool_search_router,
+    integrations,
+    webhooks,
+    communication,
+    import_engine,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -223,6 +231,14 @@ app.include_router(resume.router)
 app.include_router(screening.router)
 app.include_router(ai_assistant.router)
 app.include_router(support.router)
+
+# ── v4.0 Enterprise Modules ──────────────────────────────────────────────────
+app.include_router(jd_intelligence.router)
+app.include_router(bool_search_router.router)
+app.include_router(integrations.router)
+app.include_router(webhooks.router)
+app.include_router(communication.router)
+app.include_router(import_engine.router)
 
 
 if __name__ == "__main__":
