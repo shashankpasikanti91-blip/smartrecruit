@@ -15,7 +15,9 @@ echo "============================================================"
 # ── 1. Pull latest code ────────────────────────────────────────
 echo "[1/7] Pulling latest code..."
 cd "$APP_DIR"
-git pull origin main
+git fetch origin
+git checkout clean_main
+git pull origin clean_main
 
 # ── 2. Update nginx config ────────────────────────────────────
 echo "[2/7] Updating nginx config..."
@@ -24,9 +26,10 @@ ln -sf "$NGINX_CONF" "$NGINX_ENABLED" 2>/dev/null || true
 nginx -t
 echo "      Nginx config OK"
 
-# ── 3. Stop running containers ────────────────────────────────
-echo "[3/7] Stopping containers..."
-docker compose down --remove-orphans
+# ── 3. Stop app container only (DB stays up — protects existing data) ────
+echo "[3/7] Stopping app container only (DB untouched)..."
+docker compose stop app 2>/dev/null || true
+docker compose rm -f app 2>/dev/null || true
 
 # ── 4. Build fresh image ──────────────────────────────────────
 echo "[4/7] Building Docker image (no cache)..."
