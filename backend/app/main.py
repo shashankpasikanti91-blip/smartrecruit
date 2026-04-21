@@ -93,7 +93,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         response.headers["X-Response-Time"] = f"{time.monotonic() - start:.4f}s"
-        response.headers.pop("server", None)
+        try:
+            del response.headers["server"]
+        except KeyError:
+            pass
         if _is_prod:
             response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
         return response
