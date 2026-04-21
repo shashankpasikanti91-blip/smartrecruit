@@ -681,7 +681,7 @@ Candidates to Screen:{candidates_text}
                 raise ValueError("No candidates in results")
             
             # Ensure we got results for all uploaded candidates
-logger.debug("Backend: Expected %d candidates, got %d results", len(request.candidates), len(results_data))
+            logger.debug("Backend: Expected %d candidates, got %d results", len(request.candidates), len(results_data))
             if len(results_data) < len(request.candidates):
                 logger.debug("WARNING: Not all candidates were screened! Expected %d, got %d", len(request.candidates), len(results_data))
                 logger.debug("Generating mock results for missing candidates...")
