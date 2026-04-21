@@ -38,6 +38,8 @@ aiosmtplib==5.1.0
 
 # ── Utilities ────────────────────────────────────────────────
 python-dateutil==2.8.2
+httpx==0.27.0                # Async HTTP client (webhook dispatch, integrations)
+pycryptodome==3.21.0         # AES-256 encryption for connector credentials
 
 # ── Development / Testing (install separately in dev) ────────
 # pytest==7.4.0
