@@ -1,0 +1,11 @@
+DELETE FROM activity_log WHERE user_id IN (SELECT id FROM auth_users WHERE email NOT IN ('pasikantishashank24@gmail.com','hareesh4u22@gmail.com','priyapasikanti0@gmail.com','demo@srpailabs.com'));
+DELETE FROM api_keys WHERE user_id IN (SELECT id FROM auth_users WHERE email NOT IN ('pasikantishashank24@gmail.com','hareesh4u22@gmail.com','priyapasikanti0@gmail.com','demo@srpailabs.com'));
+DELETE FROM integrations WHERE user_id IN (SELECT id FROM auth_users WHERE email NOT IN ('pasikantishashank24@gmail.com','hareesh4u22@gmail.com','priyapasikanti0@gmail.com','demo@srpailabs.com'));
+DELETE FROM token_usage WHERE user_id IN (SELECT id FROM auth_users WHERE email NOT IN ('pasikantishashank24@gmail.com','hareesh4u22@gmail.com','priyapasikanti0@gmail.com','demo@srpailabs.com'));
+DELETE FROM resumes WHERE user_id IN (SELECT id FROM auth_users WHERE email NOT IN ('pasikantishashank24@gmail.com','hareesh4u22@gmail.com','priyapasikanti0@gmail.com','demo@srpailabs.com'));
+DELETE FROM job_post_contents WHERE job_post_id IN (SELECT id FROM job_posts WHERE user_id IN (SELECT id FROM auth_users WHERE email NOT IN ('pasikantishashank24@gmail.com','hareesh4u22@gmail.com','priyapasikanti0@gmail.com','demo@srpailabs.com')));
+DELETE FROM job_posts WHERE user_id IN (SELECT id FROM auth_users WHERE email NOT IN ('pasikantishashank24@gmail.com','hareesh4u22@gmail.com','priyapasikanti0@gmail.com','demo@srpailabs.com'));
+DELETE FROM subscriptions WHERE user_id IN (SELECT id FROM auth_users WHERE email NOT IN ('pasikantishashank24@gmail.com','hareesh4u22@gmail.com','priyapasikanti0@gmail.com','demo@srpailabs.com'));
+DELETE FROM complaints WHERE user_id IN (SELECT id FROM auth_users WHERE email NOT IN ('pasikantishashank24@gmail.com','hareesh4u22@gmail.com','priyapasikanti0@gmail.com','demo@srpailabs.com'));
+DELETE FROM auth_users WHERE email NOT IN ('pasikantishashank24@gmail.com','hareesh4u22@gmail.com','priyapasikanti0@gmail.com','demo@srpailabs.com');
+SELECT name, email, role FROM auth_users ORDER BY created_at;

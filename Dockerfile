@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies into a temp layer
-COPY requirements.production.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.production.txt
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ──────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
@@ -28,15 +28,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 curl && rm -rf /var/lib/apt/lists/*
 
 # Copy application code (no .env, no .git, no __pycache__)
-COPY app/           ./app/
-COPY templates/     ./templates/
-COPY static/        ./static/
-COPY system_prompts.txt ./system_prompts.txt
-# Backward-compat symlink so old relative path still works
-RUN ln -s /app/system_prompts.txt "/app/System prompts ALL.txt"
+COPY backend/app/               ./app/
+COPY backend/utils/             ./utils/
+COPY backend/workflows/         ./workflows/
+COPY backend/system_prompts.txt ./system_prompts.txt
+COPY frontend/templates/        ./templates/
+COPY frontend/static/           ./static/
 
 # Copy gunicorn configuration
-COPY gunicorn.conf.py ./
+COPY backend/gunicorn.conf.py   ./gunicorn.conf.py
 
 # Create writable directories
 RUN mkdir -p uploads/resumes logs && \

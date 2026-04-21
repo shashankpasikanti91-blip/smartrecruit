@@ -55,9 +55,13 @@ list_tables.py
 *.bat
 *.ps1
 *.txt
-!requirements.production.txt
-!"System prompts ALL.txt"
-!system_prompts.txt
+!backend/system_prompts.txt
+
+# ── Folders that don't go in the image ────────────────────────────────────
+db/
+docs/
+deployment/
+nextjs-auth/
 
 # ── IDE & OS ──────────────────────────────────────────────────────────────
 .vscode/
@@ -70,6 +74,5 @@ Thumbs.db
 # ── CI/CD ─────────────────────────────────────────────────────────────────
 .github/
 
-# ── Old requirements (use requirements.production.txt) ────────────────────
-requirements.txt
+# ── Old requirements ────────────────────────────────────────────────────────
 requirements_v3.2.txt
