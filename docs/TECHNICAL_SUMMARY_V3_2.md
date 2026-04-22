@@ -1,4 +1,162 @@
-# Advanced Recruitment ATS v3.0 - TECHNICAL SUMMARY
+# SRP SmartRecruit — Technical Summary (Enterprise Edition)
+
+> **Live:** https://recruit.srpailabs.com  
+> **Stack:** Next.js 14 App Router · PostgreSQL · NextAuth · OpenAI GPT-4o-mini
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Browser (https://recruit.srpailabs.com)                    │
+│    Next.js 14 App Router (nextjs-auth/)                     │
+│    • /app/dashboard/page.tsx  — full SPA-style dashboard    │
+│    • /app/api/*               — Next.js Route Handlers      │
+│    • NextAuth v4              — session + Google OAuth      │
+└───────────────────────────────┬─────────────────────────────┘
+                                │ pg pool
+┌───────────────────────────────▼─────────────────────────────┐
+│  PostgreSQL 16 (Docker: srp-auth-db)                        │
+│  • users, subscriptions                                     │
+│  • candidates, job_posts                                    │
+│  • screen_results, jd_history, boolean_history              │
+│  • import_batches, audit_logs                               │
+│  • integrations, api_keys, comms_templates                  │
+└─────────────────────────────────────────────────────────────┘
+
+Optional sidecar:
+  FastAPI backend (port 8009) — legacy v3.2 webhooks / n8n
+```
+
+---
+
+## Frontend — Dashboard Tabs
+
+| Tab | Key Feature |
+|---|---|
+| Pipeline | Kanban stage view, drag stage badges |
+| Candidates | Table with ID / Match / Stage / Uploaded / Skills / Actions |
+| AI Screen | Upload JD + resumes, GPT-4o-mini scoring 0–100 |
+| Compose | AI email / WhatsApp / LinkedIn message composer |
+| **Jobs** | **Enterprise table** — ID / Role / Company / Type / Candidates / Status / Posted |
+| Analytics | KPI cards + hire funnel + upload activity |
+| JD Writer | AI JD generator with history + `fmtDate()` |
+| Boolean | AI Boolean query builder with history + `fmtDate()` |
+| Import | CSV bulk import — Naukri / LinkedIn / Indeed — column guide |
+| Integrations | Connect n8n / Naukri / Monster / Indeed / LinkedIn / Greenhouse / Lever |
+| Comms Hub | Seeded templates + AI rewrite + send log |
+| **Settings** | Profile / Subscription / API Keys / Integrations / **Audit Trail** |
+
+---
+
+## Design System (Enterprise Spec)
+
+```css
+/* Sidebar */
+--sidebar-bg:    #0F172A;   /* Tailwind slate-900 */
+--sidebar-hover: #1E293B;   /* slate-800 */
+--sidebar-active:#2563EB;   /* blue-600 */
+--sidebar-muted: #CBD5E1;   /* slate-300 */
+
+/* Dashboard main area */
+--dash-bg:       #F8FAFC;   /* slate-50 */
+--dash-surface:  #FFFFFF;
+--dash-border:   #E2E8F0;   /* slate-200 */
+--dash-text:     #0F172A;   /* slate-900 */
+--dash-text-2:   #64748B;   /* slate-500 */
+
+/* Semantic */
+--color-primary: #2563EB;
+--color-success: #16A34A;
+--color-warning: #F59E0B;
+--color-danger:  #DC2626;
+--color-purple:  #7C3AED;
+```
+
+Fonts: **Plus Jakarta Sans** (page titles) → **Manrope** → **Inter** → system-ui
+
+---
+
+## Key Components
+
+### `ShortIdBadge`
+Click-to-copy short ID pill. `CAN-XXXXXX` / `JOB-XXXXXX` format.
+
+### `StagePill` (variant: `dark` | `light`)
+- `dark` — glassmorphism modals (default)
+- `light` — white-bg tables (`STAGE_LIGHT` constant)
+
+### `MatchBadge` (variant: `dark` | `light`)
+- `dark` — dark modals
+- `light` — white-bg tables (`MATCH_LIGHT` constant)
+
+### `fmtDate(d, includeTime?)`
+Formats ISO string to `"12 Jan 2025"` or `"12 Jan 2025, 14:30"`. Used everywhere instead of `.toLocaleDateString()`.
+
+### `logAudit(ev)` — `lib/audit.ts`
+Fire-and-forget audit logger. Calls `POST /api/audit`. Never throws.
+
+---
+
+## Database Schema (key tables)
+
+```sql
+users(id, email, name, role, provider, image, created_at)
+subscriptions(user_id, plan, status, billing_cycle, expires_at)
+
+job_posts(id, user_id, short_id, title, company, location, type,
+          description, requirements, status, created_at)
+
+candidates(id, user_id, short_id, candidate_name, candidate_email,
+           pipeline_stage, ai_score, match_category, ai_skills,
+           job_post_id, created_at)
+
+screen_results(id, user_id, candidate_name, ai_score, match_category,
+               screened_at, created_at)
+
+audit_logs(id, user_id, action, resource_type, resource_id,
+           result, details, ip_address, created_at)
+
+import_batches(id, user_id, batch_ref, filename, total_rows,
+               imported_rows, failed_rows, status, created_at)
+
+comms_templates(id, user_id, name, platform, content, created_at)
+integrations(id, user_id, provider, webhook_url, is_active, created_at)
+api_keys(id, user_id, key_prefix, key_hash, label, is_active, created_at)
+```
+
+Migrations in `nextjs-auth/db/`:
+- `schema.sql` — base
+- `migrate_v5_enterprise.sql` — enterprise tables
+- `migrate_v6_id_date_system.sql` — short_id, screened_at, audit_logs
+
+---
+
+## Audit Trail (Phase 8)
+
+`GET /api/audit?limit=50&action=&resource=` — paginated, admin sees all, users see own  
+`POST /api/audit` — internal write endpoint (called by `logAudit()`)
+
+Events logged:
+- `stage_changed` — candidate pipeline stage update
+- `job_created` — new job post
+- `ai_screening` — AI screen run
+
+---
+
+## Import Engine
+
+`POST /api/import` — multipart CSV upload  
+`GET /api/import?batch_id=` — batch status + row errors
+
+Auto-detects column names from Naukri, LinkedIn Recruiter, Indeed/Monster exports.
+Unrecognised columns kept as raw `raw_data` JSONB.
+
+---
+
+**Version:** Enterprise v5.1 · **Last Updated:** April 2026
+
 
 ## 🏗️ System Architecture
 

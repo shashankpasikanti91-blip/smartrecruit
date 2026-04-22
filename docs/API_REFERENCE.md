@@ -1,5 +1,219 @@
-"""
-API Quick Reference and Setup Guide
-"""
+# SRP SmartRecruit — API Reference (Next.js Route Handlers)
+
+Base URL: `https://recruit.srpailabs.com`  
+All endpoints require `Authorization: Bearer <session-token>` via NextAuth session cookie, **except** `/api/auth/*` and `/api/health`.
+
+External integrations use: `Authorization: Bearer srp_<api-key>`
+
+---
+
+## Authentication
+
+### `POST /api/auth/[...nextauth]`
+NextAuth magic route — handles Google OAuth + credentials sign-in/sign-up.
+
+### `POST /api/register`
+Register with email+password.
+```json
+{ "name": "Jane Smith", "email": "jane@co.com", "password": "min8chars" }
+```
+
+---
+
+## Candidates
+
+### `GET /api/candidates`
+List candidates for the authenticated user.
+
+| Query Param | Description |
+|---|---|
+| `q` | Search name, email, or short_id (`CAN-xxxxxx`) |
+| `job_id` | Filter by job post id |
+| `stage` | Filter by pipeline stage |
+| `from` | ISO date — filter uploaded after |
+
+**Response** `200`
+```json
+{ "candidates": [ { "id": "...", "short_id": "CAN-XXXXXX", "candidate_name": "...",
+  "pipeline_stage": "screening", "ai_score": 84, "match_category": "best",
+  "ai_skills": ["Python","SQL"], "created_at": "2025-01-12T10:30:00Z", ... } ] }
+```
+
+### `PATCH /api/candidates/[id]`
+Update a candidate (stage, job assignment, etc.).
+```json
+{ "pipeline_stage": "interview" }
+```
+Logs `stage_changed` to audit trail.
+
+---
+
+## Jobs
+
+### `GET /api/jobs`
+List job posts for user. Also accepts `q` for JOB-xxxxxx search.
+
+### `POST /api/jobs`
+Create a new job post. Logs `job_created` to audit trail.
+```json
+{ "title": "Backend Engineer", "company": "ACME", "location": "Remote",
+  "type": "full-time", "description": "...", "requirements": "..." }
+```
+
+### `POST /api/jobs/generate-posts`
+Generate social media posts (LinkedIn, WhatsApp, Email, etc.) for a job.
+```json
+{ "job_post_id": "uuid", "custom_prompt": "optional extra context" }
+```
+
+---
+
+## AI Screening
+
+### `POST /api/screen`
+Screen candidates against a JD using GPT-4o-mini.
+```json
+{
+  "jd_text": "Job description...",
+  "candidates": [
+    { "name": "Alice", "text": "Resume content..." }
+  ],
+  "job_post_id": "optional-uuid"
+}
+```
+**Response** `200`
+```json
+{
+  "results": [
+    { "name": "Alice", "score": 87, "category": "best",
+      "skills": ["Python","FastAPI"], "summary": "...",
+      "screened_at": "2025-04-22T10:00:00Z" }
+  ]
+}
+```
+Logs `ai_screening` to audit trail.
+
+---
+
+## JD Intelligence
+
+### `POST /api/jd`
+Generate a job description.
+```json
+{ "title": "Senior Python Dev", "company": "ACME",
+  "requirements": "5yr exp, FastAPI, PostgreSQL", "tone": "professional" }
+```
+
+### `GET /api/jd`
+List JD generation history for user.
+
+---
+
+## Boolean Search
+
+### `POST /api/boolean`
+Generate a Boolean search string.
+```json
+{ "job_title": "Data Engineer", "skills": "Spark, Kafka, Python",
+  "experience": "3-5 years", "location": "Hyderabad" }
+```
+
+### `GET /api/boolean`
+List Boolean search history for user.
+
+---
+
+## Import Engine
+
+### `POST /api/import`
+Upload a CSV file (multipart/form-data, field: `file`, max 5 MB).
+
+Auto-detects columns for: name, email, phone, skills, experience, current_company, current_title, location.
+Accepts exports from Naukri, LinkedIn Recruiter, Indeed, Monster.
+
+**Response** `200`
+```json
+{ "batch_ref": "IMP-XXXXXX", "total_rows": 150, "detected_columns": ["name","email","skills"] }
+```
+
+### `GET /api/import`
+List import batches. Add `?batch_id=` for row-level detail.
+
+---
+
+## Audit Trail
+
+### `GET /api/audit`
+Paginated audit log.
+
+| Query Param | Description |
+|---|---|
+| `limit` | Max rows (default 50, max 200) |
+| `action` | Filter by action string |
+| `resource` | Filter by resource_type |
+
+Admin users see all events; regular users see own events only.
+
+### `POST /api/audit`
+Internal write endpoint (called by `logAudit()` helper — not for external use).
+
+---
+
+## Communications
+
+### `GET /api/comm`
+List communication templates and send log for user.
+
+### `POST /api/comm`
+Actions: `send_message`, `save_template`, `delete_template`, `ai_compose`, `ai_rewrite`.
+```json
+{ "action": "send_message", "to": "candidate@email.com",
+  "subject": "Interview Invite", "body": "..." }
+```
+
+---
+
+## Profile & Settings
+
+### `GET /api/profile`
+Fetch user profile + subscription + usage stats.
+
+### `POST /api/profile`
+Actions: `update_name`, `get_api_keys`, `generate_api_key`, `revoke_api_keys`.
+
+---
+
+## Integrations
+
+### `GET /api/integrations`
+List connected integrations for user.
+
+### `POST /api/integrations`
+Actions: `upsert` (add/update), `toggle` (enable/disable), `delete`.
+```json
+{ "action": "upsert", "provider": "naukri",
+  "api_key": "...", "webhook_url": "https://..." }
+```
+
+---
+
+## Health
+
+### `GET /api/health`
+Returns `{ "status": "ok", "db": "connected" }`. No auth required.
+
+---
+
+## External API Access (API Key)
+
+Generate a key in Settings → API Integration.  
+Pass in header: `Authorization: Bearer srp_xxxxxxxxxxxxxxxx`
+
+Supported external endpoints: `/api/screen`, `/api/candidates` (GET), `/api/jobs` (GET/POST)
+
+---
+
+**Version:** Enterprise v5.1 · **Last Updated:** April 2026
+
 
 # 🎯 QUICK START SETUP (5 minutes)\n\n## Step 1: Install Dependencies\n```bash\ncd recruitment_ai_system\npip install -r requirements.txt\n```\n\n## Step 2: Configure Environment\n```bash\ncp .env.example .env\n\n# Edit .env with:\n# - OPENAI_API_KEY: Get from https://platform.openai.com/api-keys\n# - SUPABASE_URL & SUPABASE_KEY: Get from https://supabase.com/dashboard\n# - GOOGLE_CREDENTIALS_PATH: Set up service account\n# - N8N_BASE_URL: http://localhost:5678 (if running locally)\n```\n\n## Step 3: Test Connection\n```bash\npython -c \"from recruitment_ai_system.utils import config; config.validate()\"\n```\n\n---\n\n# 📚 API REFERENCE\n\n## Core Classes\n\n### RecruitmentAISystem\nMain orchestrator for all AI recruitment operations.\n\n```python\nfrom recruitment_ai_system.main import RecruitmentAISystem\nimport asyncio\n\n# Initialize\nsystem = RecruitmentAISystem()\n\n# Methods:\nawait system.screen_candidate(candidate_id, resume_text, jd_id, jd_text)\nawait system.process_jd(jd_id, jd_text, job_title, client_name)\nawait system.generate_message(message_type, tone, platform, recipient_name, recipient_email, context)\nawait system.process_form_submission(submission_data)\nawait system.health_check()\n```\n\n### ScreeningAgent\nAI agent for candidate screening.\n\n```python\nfrom recruitment_ai_system.agents import ScreeningAgent\n\nagent = ScreeningAgent()\n\n# Single screening\nresult = agent.screen_candidate(\n    resume_text=\"Resume content...\",\n    jd_text=\"Job description...\",\n    candidate_id=\"cand_123\",\n    jd_id=\"jd_456\"\n)\n\n# Batch screening\nresults = agent.batch_screen(\n    candidates=[\n        {\"id\": \"cand_1\", \"resume_text\": \"....\", \"jd_id\": \"jd_456\"},\n        {\"id\": \"cand_2\", \"resume_text\": \"....\", \"jd_id\": \"jd_456\"}\n    ],\n    jd_text=\"Job description...\"\n)\n```\n\n**Response Fields:**\n- `overall_score` (0-1): Match score\n- `recommendation`: strong_match | good_match | fair_match | poor_match\n- `required_skills_match` (0-1): % of required skills found\n- `experience_score` (0-1): Experience match\n- `strengths`: [list] Candidate's strong points\n- `gaps`: [list] Skill gaps\n- `recommended_questions`: [list] Interview questions\n\n### MessagingAgent\nAI agent for message generation.\n\n```python\nfrom recruitment_ai_system.agents import MessagingAgent\n\nagent = MessagingAgent()\n\n# Generate single message\nmessage = agent.generate_message(\n    message_type=\"interview_invite\",  # job_posting, offer, rejection, etc.\n    tone=\"professional\",  # formal, professional, semi_formal, friendly, casual\n    platform=\"email\",  # email, whatsapp, linkedin, telegram, sms\n    recipient_name=\"John\",\n    context={\n        \"job_title\": \"Senior Developer\",\n        \"company_name\": \"TechCorp\",\n        \"interview_date\": \"2026-02-15\",\n        \"interview_link\": \"https://zoom.us/...\"\n    }\n)\n\n# Generate job posting for multiple platforms\njob_posts = agent.generate_job_posting(\n    job_title=\"Senior Python Developer\",\n    company_name=\"TechCorp\",\n    tone=\"professional\",\n    platforms=[\"linkedin\", \"email\", \"whatsapp\"],\n    context={\n        \"responsibilities\": [\"Build microservices\", \"Lead team\"],\n        \"key_skills\": [\"Python\", \"FastAPI\", \"PostgreSQL\"],\n        \"experience_required\": 5,\n        \"salary_range\": \"$120k-$160k\"\n    }\n)\n```\n\n**Message Response:**\n- `id`: Unique message ID\n- `subject`: Email subject (if applicable)\n- `body`: Full message content\n- `tone_applied`: Actual tone used\n- `platform`: Target platform\n\n### MatchingEngine\nSemantic matching and scoring.\n\n```python\nfrom recruitment_ai_system.agents import MatchingEngine\n\nengine = MatchingEngine()\n\n# Semantic similarity\nsimilarity = engine.calculate_semantic_similarity(\n    resume_text=\"...\",\n    jd_text=\"...\"\n)\n\n# Skill matching\nskill_scores = engine.calculate_skill_match_score(\n    candidate_skills=[\"Python\", \"FastAPI\", \"Docker\"],\n    required_skills=[\"Python\", \"FastAPI\", \"PostgreSQL\"],\n    preferred_skills=[\"Kubernetes\", \"AWS\"]\n)\n\n# Comprehensive scoring\ncomposite = engine.calculate_composite_match_score(\n    resume_text=\"...\",\n    jd_text=\"...\",\n    candidate_skills=[...],\n    required_skills=[...],\n    candidate_experience=5.5,\n    required_experience=5\n)\n```\n\n### SupabaseClient\nDatabase operations.\n\n```python\nfrom recruitment_ai_system.database import SupabaseClient\n\ndb = SupabaseClient()\n\n# Candidate operations\nawait db.create_candidate({...})\nawait db.get_candidate(candidate_id)\nawait db.list_candidates_for_jd(jd_id, status=\"screening\")\nawait db.update_candidate(candidate_id, {\"status\": \"selected\"})\n\n# Requirement operations\nawait db.create_requirement({...})\nawait db.get_requirement(jd_id)\nawait db.list_requirements(status=\"open\")\n\n# Screening results\nawait db.create_screening_result({...})\nawait db.get_screening_result(screening_id)\nawait db.get_candidate_screening(candidate_id, jd_id)\n\n# Interviews\nawait db.create_interview({...})\nawait db.list_candidate_interviews(candidate_id)\nawait db.update_interview(interview_id, {\"status\": \"completed\"})\n\n# Selections\nawait db.create_selection({...})\nawait db.update_selection(selection_id, {\"status\": \"offer_sent\"})\n\n# Embeddings\nawait db.store_embedding(entity_type, entity_id, text, embedding)\nawait db.search_similar(embedding, limit=10)\n```\n\n### DriveLoader\nGoogle Drive integration.\n\n```python\nfrom recruitment_ai_system.integrations import DriveLoader\n\nloader = DriveLoader()\n\n# Load resume\nresume = loader.load_resume(file_id)\n# Returns: {\"file_id\", \"file_name\", \"text\", \"size_bytes\"}\n\n# Load JD\njd = loader.load_jd(file_id)\n\n# Search files\nfiles = loader.search_files(\n    folder_id=\"drive_folder_id\",\n    query=\"resume\",\n    file_type=\"pdf,docx\"\n)\n\n# List folder\nfiles = loader.list_folder_contents(folder_id, file_type=\"pdf\")\n\n# Upload file\nfile_id = loader.upload_file(\n    file_path=\"/path/to/file.pdf\",\n    folder_id=\"destination_folder_id\"\n)\n```\n\n### EmbeddingEngine\nEmbedding and similarity operations.\n\n```python\nfrom recruitment_ai_system.integrations import EmbeddingEngine\n\nengine = EmbeddingEngine()\n\n# Embed single text\nembedding = engine.embed_text(\"Some text...\")\n\n# Embed multiple texts\nembeddings = engine.embed_texts([\"Text 1\", \"Text 2\", \"Text 3\"])\n\n# Calculate similarity\nsimilarity = EmbeddingEngine.cosine_similarity(embedding1, embedding2)\n\n# Find similar\nsimilar = EmbeddingEngine.find_similar_embeddings(\n    query_embedding=query_embedding,\n    embedding_list=[...],\n    top_k=10,\n    threshold=0.7\n)\n```\n\n### N8nClient\nn8n workflow orchestration.\n\n```python\nfrom recruitment_ai_system.workflows import N8nClient\n\nclient = N8nClient()\n\n# Trigger workflow\nresult = await client.trigger_workflow(\n    workflow_id=\"workflow_123\",\n    data={\"key\": \"value\"},\n    wait_for_completion=True\n)\n\n# Trigger specific workflows\nawait client.trigger_screening_workflow(\n    candidate_id=\"cand_123\",\n    resume_text=\"...\",\n    jd_id=\"jd_456\",\n    jd_text=\"...\"\n)\n\nawait client.trigger_messaging_workflow(\n    message_type=\"interview_invite\",\n    recipient_email=\"john@example.com\",\n    recipient_name=\"John\",\n    context={...}\n)\n\n# Get workflow info\nworkflow = await client.get_workflow(workflow_id)\nworkflows = await client.list_workflows()\nexecutions = await client.get_execution_history(workflow_id)\n\n# Health check\nis_healthy = await client.health_check()\n```\n\n### ControlPanelManager\nControl panel configuration management.\n\n```python\nfrom recruitment_ai_system.control_panel import ControlPanelManager\n\nmanager = ControlPanelManager()\n\n# Parse form submission\nparsed = manager.parse_form_submission(form_data)\n\n# Route task\nroute = manager.route_task(task_type, data)\n\n# Generate context\ncontext = manager.generate_task_context(\n    task_type=\"Screen CV against JD\",\n    input_text=\"resume content...\",\n    context_info=\"Backend role\"\n)\n\n# Log execution\nmanager.log_task_execution(\n    task_id=\"task_123\",\n    task_type=\"Screen CV against JD\",\n    status=\"completed\",\n    result={...}\n)\n```\n\n---\n\n# 🔄 Common Workflows\n\n## Full Candidate Screening Pipeline\n\n```python\nimport asyncio\nfrom recruitment_ai_system.main import RecruitmentAISystem\n\nasync def screen_candidate_pipeline(candidate_data, jd_data):\n    system = RecruitmentAISystem()\n    \n    # 1. Screen candidate\n    screening = await system.screen_candidate(\n        candidate_id=candidate_data[\"id\"],\n        resume_text=candidate_data[\"resume\"],\n        jd_id=jd_data[\"id\"],\n        jd_text=jd_data[\"description\"]\n    )\n    \n    # 2. If strong match, generate interview invite\n    if screening[\"overall_score\"] > 0.7:\n        message = await system.generate_message(\n            message_type=\"interview_invite\",\n            tone=\"professional\",\n            platform=\"email\",\n            recipient_name=candidate_data[\"name\"],\n            recipient_email=candidate_data[\"email\"],\n            context={\n                \"job_title\": jd_data[\"title\"],\n                \"interview_date\": \"2026-02-20\"\n            }\n        )\n        print(f\"Interview invite: {message['body']}\")\n    \n    # 3. If poor match, generate rejection\n    elif screening[\"overall_score\"] < 0.4:\n        message = await system.generate_message(\n            message_type=\"rejection\",\n            tone=\"professional\",\n            platform=\"email\",\n            recipient_name=candidate_data[\"name\"],\n            recipient_email=candidate_data[\"email\"],\n            context={\"job_title\": jd_data[\"title\"]}\n        )\n        print(f\"Rejection: {message['body']}\")\n    \n    return screening\n\n# Run pipeline\ncandidate = {\n    \"id\": \"cand_001\",\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"resume\": \"... resume text ...\"\n}\n\njd = {\n    \"id\": \"jd_001\",\n    \"title\": \"Senior Developer\",\n    \"description\": \"... jd text ...\"\n}\n\nresult = asyncio.run(screen_candidate_pipeline(candidate, jd))\n```\n\n## Job Post Generation\n\n```python\nasync def create_job_posting():\n    system = RecruitmentAISystem()\n    \n    # Process JD\n    await system.process_jd(\n        jd_id=\"jd_001\",\n        jd_text=\"Senior Python Developer needed...\",\n        job_title=\"Senior Python Developer\",\n        client_name=\"TechCorp\"\n    )\n    \n    # Generate multi-platform posts\n    posts = await system.generate_message(\n        message_type=\"job_posting\",\n        tone=\"professional\",\n        platform=\"linkedin\",  # Can loop through multiple\n        recipient_name=\"Hiring Manager\",\n        recipient_email=\"hr@example.com\",\n        context={...}\n    )\n```\n\n---\n\n# 🛠️ Troubleshooting\n\n## Authentication Errors\n\n```\nError: Missing required configuration\n→ Check .env file has all required keys\n→ Run: python -c \"from recruitment_ai_system.utils import config; config.validate()\"\n```\n\n## Database Connection Errors\n\n```\nError: Supabase connection failed\n→ Verify SUPABASE_URL and SUPABASE_KEY\n→ Check Supabase tables exist\n→ Test: await db_client.health_check()\n```\n\n## OpenAI API Errors\n\n```\nError: Invalid OpenAI API key\n→ Get new key from https://platform.openai.com/api-keys\n→ Ensure key has sufficient credits\n→ Check OPENAI_API_KEY in .env\n```\n\n## n8n Connection Issues\n\n```\nError: Cannot reach n8n instance\n→ Ensure n8n is running: n8n\n→ Check N8N_BASE_URL (default: http://localhost:5678)\n→ Verify firewall allows port 5678\n```\n\n---\n\n**Last Updated:** February 2026\n**Version:** 1.0.0\n

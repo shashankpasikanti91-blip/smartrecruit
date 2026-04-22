@@ -1,7 +1,135 @@
 # SRP SmartRecruit — Project Tasks
 
-## In Progress
-- [ ] Deploy to production (Hetzner 5.223.67.236 → recruit.srpailabs.com)
+## ✅ Completed (Enterprise Edition)
+
+### Bug Fixes
+- [x] Integration Hub blank page (API auth + error UI)
+- [x] Boolean Search missing file upload → LightFileUploadZone added
+- [x] JD Intelligence missing file upload → LightFileUploadZone added
+- [x] Communication Hub no templates → seeded 7 default templates
+
+### Phase 1–2: Universal IDs + Date Formatting
+- [x] `ShortIdBadge` component — click-to-copy short IDs (CAN-/JOB-)
+- [x] `fmtDate()` utility — consistent "12 Jan 2025" format across all tabs
+
+### Phase 3–4: Search + Filters
+- [x] Global search by short ID — CAN- prefix → Candidates tab, JOB- prefix → Jobs tab
+- [x] Date filter dropdown — filter candidates by upload date (today/7d/30d/90d)
+- [x] Date filter wired to `/api/candidates?from=` query param
+
+### Phase 5–6: Table UX Improvements
+- [x] Candidates table — "Uploaded" column with fmtDate()
+- [x] Job cards/rows — posted date visible
+- [x] Candidate detail modal — "Uploaded: date" in header
+
+### Phase 7: Analytics
+- [x] Analytics tab — "Upload Activity" card showing weekly upload trend
+
+### Phase 8: Audit Logging (Backend)
+- [x] `nextjs-auth/lib/audit.ts` — fire-and-forget `logAudit()` helper
+- [x] `GET/POST /api/audit` — paginated audit log API (admin sees all, users see own)
+- [x] Pipeline stage changes (PATCH `/api/candidates/[id]`) → logAudit
+- [x] Job creation (POST `/api/jobs`) → logAudit
+- [x] AI screening (POST `/api/screen`) → logAudit + screened_at timestamp
+
+### Phase 9: AI Output Timestamps
+- [x] JD Intelligence history — dates use fmtDate() instead of toLocaleDateString()
+- [x] Boolean Search history — dates use fmtDate() instead of toLocaleDateString()
+
+### Phase 10: Audit Trail UI
+- [x] Settings tab — "Audit Trail" card showing last 50 events
+- [x] Table columns: Action, Resource, ID, Result, When
+- [x] Loads via `GET /api/audit` on settings tab open; refresh button
+
+### Phase 11: Import Enhancements
+- [x] Import tab — Column Mapping Guide card (Naukri / LinkedIn / Indeed column names)
+- [x] Auto-detection explained; unrecognised columns kept as raw metadata
+
+### Enterprise UI Upgrade
+- [x] `globals.css` — CSS variables updated to exact spec (#0F172A sidebar, #2563EB active, #E2E8F0 borders)
+- [x] `globals.css` — Added Plus Jakarta Sans font; `.page-title`, `.ent-table`, `.drawer-panel`, `.stage-*` utility classes
+- [x] Sidebar — inline style colors updated to match spec
+- [x] `STAGE_LIGHT` constant — light-bg stage pill variants (for white-bg tables)
+- [x] `MATCH_LIGHT` constant — light-bg match badge variants
+- [x] `StagePill` — `variant="light"` prop; candidates table uses it
+- [x] `MatchBadge` — `variant="light"` prop; candidates table uses it
+- [x] **Jobs tab — card grid → professional table** (ID / Role / Company / Location / Type / Candidates / Status / Posted / Actions)
+- [x] DB migration v6 (`migrate_v6_audit_trail.sql`)
+
+## 🔄 In Progress
+- [ ] Deploy updated nextjs-auth build to production (Hetzner 5.223.67.236)
+- [ ] E2E smoke test after deploy
+
+## ❌ Backlog / Next Sprint
+
+### Security
+- [ ] File upload: server-side MIME type validation
+- [ ] File upload: 10 MB size limit enforcement
+- [ ] Input validation: max text length on all AI endpoints
+- [ ] Rate limiting: per-IP limits on AI endpoints
+
+### Testing
+- [ ] Add pytest unit tests for core backend endpoints
+- [ ] Add Playwright E2E tests for dashboard happy paths
+
+### Frontend Polish
+- [ ] Mobile responsive review (sidebar collapse on < 768px)
+- [ ] Loading skeletons for AI calls > 2s
+- [ ] Keyboard shortcut: `Cmd/Ctrl + K` for global search
+
+### Future Features
+- [ ] Candidate bulk status update (select rows → change stage)
+- [ ] Job posting → direct apply link / public job board page
+- [ ] Email notifications on stage change (via n8n trigger)
+- [ ] Webhook inbound: parse external ATS pushes
+
+## Deployment Reference
+
+```bash
+# On Hetzner server — /opt/srp-ats/nextjs-auth
+git pull
+npm install
+npm run build
+pm2 restart smartrecruit-nextjs   # or: systemctl restart smartrecruit-nextjs
+
+# Full Docker rebuild
+cd /opt/srp-ats
+docker compose down
+docker compose up -d --build
+docker compose logs -f
+```
+
+## Project Structure (current)
+
+```
+SRP Smartrecruit/
+├── nextjs-auth/                  # Next.js 14 App Router — PRIMARY FRONTEND
+│   ├── app/
+│   │   ├── dashboard/page.tsx    # Main dashboard (~3700 lines, all tabs)
+│   │   ├── globals.css           # Enterprise design system CSS
+│   │   ├── api/                  # Next.js API routes
+│   │   │   ├── audit/            # GET/POST audit logs
+│   │   │   ├── candidates/       # CRUD + stage changes
+│   │   │   ├── jobs/             # Job CRUD
+│   │   │   ├── screen/           # AI screening
+│   │   │   ├── import/           # CSV bulk import
+│   │   │   ├── jd/               # JD generation
+│   │   │   ├── boolean/          # Boolean search
+│   │   │   └── ...
+│   ├── lib/
+│   │   ├── audit.ts              # Fire-and-forget logAudit()
+│   │   ├── db.ts                 # PostgreSQL pool
+│   │   └── auth.ts               # NextAuth config
+│   └── db/
+│       ├── schema.sql            # Base schema
+│       ├── migrate_v5_enterprise.sql  # Enterprise tables
+│       └── migrate_v6_audit_trail.sql # audit_logs table (Phase 8)
+├── backend/                      # Legacy FastAPI backend (v3.2)
+├── frontend/                     # Legacy HTML templates
+├── docs/                         # Technical documentation
+├── deployment/                   # nginx, systemd, deploy scripts
+└── db/                           # Legacy DB scripts
+```
 
 ## Backend
 - [x] Restructure into `backend/` folder
