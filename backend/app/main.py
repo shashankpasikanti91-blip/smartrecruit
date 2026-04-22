@@ -209,19 +209,11 @@ async def health_check():
     }
 
 
-# Main UI endpoint — serve the v3.2 dashboard app
+# /app and /dashboard are now handled by the Next.js frontend (nginx routes them to :3010)
+# Legacy fallback: redirect any direct FastAPI hit on /app to Next.js /dashboard
 @app.get("/app")
-async def serve_app(request: Request):
-    """Serve the main application UI"""
-    return templates.TemplateResponse(
-        "dashboard_v3_2.html",
-        {"request": request, "version": "3.2.0"}
-    )
-
-# Legacy redirect: /dashboard → /app
-@app.get("/dashboard")
-async def dashboard_redirect():
-    return RedirectResponse(url="/app", status_code=301)
+async def app_redirect():
+    return RedirectResponse(url="/dashboard", status_code=301)
 
 
 # Include routers
