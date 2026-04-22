@@ -56,13 +56,18 @@
 - [x] **Jobs tab — card grid → professional table** (ID / Role / Company / Location / Type / Candidates / Status / Posted / Actions)
 - [x] DB migration v6 (`migrate_v6_audit_trail.sql`)
 
+## ✅ Recently Completed
+
+### Deploy v5.1 Enterprise to Production
+- [x] Deploy updated nextjs-auth build to production (Hetzner 5.223.67.236)
+- [x] E2E smoke test after deploy — ALL 6 CHECKS PASSED
+- [x] Fix `/app` route serving old Jinja2 `dashboard_v3_2.html` — now 301 → `/dashboard` (Next.js)
+- [x] Fix nginx: add all enterprise API prefixes (jd, boolean-search, import, integrations, comm, audit, webhooks, profile) to Next.js route regex
+- [x] Fix nginx: remove dead duplicate `recruit.srpailabs.com` block from `srpailabs.conf` (was routing to non-existent port 3004)
+- [x] Update `backend/app/main.py`: remove old `/app` Jinja2 render, keep `/app` → 301 → `/dashboard`
+
 ## 🔄 In Progress
-- [ ] Deploy updated nextjs-auth build to production (Hetzner 5.223.67.236)
-- [ ] E2E smoke test after deploy
-
 ## ❌ Backlog / Next Sprint
-
-### Security
 - [ ] File upload: server-side MIME type validation
 - [ ] File upload: 10 MB size limit enforcement
 - [ ] Input validation: max text length on all AI endpoints
