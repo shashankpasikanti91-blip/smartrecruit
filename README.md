@@ -1,7 +1,7 @@
 # SRP SmartRecruit — AI-Powered ATS
 
 **Live:** https://recruit.srpailabs.com  
-**Stack:** Next.js 14 · TypeScript · FastAPI · PostgreSQL · Docker · Tailwind CSS
+**Stack:** Next.js 16 · TypeScript · FastAPI · PostgreSQL · Docker · Tailwind CSS
 
 AI-powered Applicant Tracking System for sourcing, screening, tracking, and hiring talent.
 
@@ -14,12 +14,16 @@ AI-powered Applicant Tracking System for sourcing, screening, tracking, and hiri
 | **Pipeline Board** | Kanban-style pipeline — Sourced → Applied → Screening → Interview → Offer → Hired |
 | **AI Resume Screening** | Scores candidates (0–100) against JDs — STRONG / KAV / REJECT classification |
 | **Bulk CV Screening** | Upload multiple resumes at once, rank all results |
+| **Token-Saving Screening** | "From Candidates" mode — reuses stored CV text from DB, skips already-screened by default, zero wasted API calls |
+| **AI Screening Data Persistence** | Full structured report saved to `ai_screening_data` JSONB; modal view shows score breakdown, gap analysis, JD match without extra API calls |
+| **Duplicate CV Guard** | Detects same-email duplicate uploads — shows amber warning with link to existing candidate record; auto-merges on screen |
 | **Job Post Generator** | AI writes job descriptions for LinkedIn, Naukri, Indeed, WhatsApp, and more |
 | **JD Intelligence** | Upload any JD file and extract structured data |
 | **Boolean Search** | Advanced sourcing query builder |
 | **Candidate Tracker** | Filter by stage, match, job, skill, date. Source + phone visible |
 | **Job Filter** | Filter jobs by status (Active/Closed/Draft) and type (Full-time/Contract/Remote/…) |
 | **Multi-Tenant** | Each company is fully isolated — all queries scoped to `tenant_id` |
+| **Multi-Tenant Invite** | Owner invites team members by email; invite token validated + hashed; one-click accept flow |
 | **Google OAuth** | One-click sign-in via NextAuth + Google Cloud |
 | **Owner Panel** | Admin view — users, activity log, token usage, subscriptions |
 | **Telegram + Email** | Real-time notifications on signup, login, errors |
@@ -53,7 +57,7 @@ Docker Compose (docker-compose.yml)
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
+| Frontend | Next.js 16.2.3 (App Router, Turbopack), TypeScript, Tailwind CSS |
 | Auth | NextAuth v4 — JWT + Google OAuth |
 | Next.js API | Route Handlers (`/app/api/**`) |
 | AI Backend | FastAPI 0.129, Python 3.11 |
@@ -70,10 +74,15 @@ Docker Compose (docker-compose.yml)
 
 ```
 srp-smartrecruit/
-├── nextjs-auth/              # Next.js 14 frontend + all API routes
+├── nextjs-auth/              # Next.js 16 frontend + all API routes
 │   ├── app/
-│   │   ├── dashboard/        # Main dashboard (pipeline, jobs, candidates, AI screen…)
+│   │   ├── dashboard/        # Main dashboard (~4000 lines — pipeline, jobs, candidates, AI screen, analytics…)
 │   │   ├── api/              # All Next.js API route handlers
+│   │   │   ├── screen/       # AI screening + ai_screening_data persistence + token-saving mode
+│   │   │   ├── candidates/   # CRUD + stage changes + duplicate guard
+│   │   │   ├── jobs/         # Job CRUD + generation
+│   │   │   ├── tenant/       # Multi-tenant invite flow (invite + accept)
+│   │   │   └── …
 │   │   ├── login/            # Auth pages
 │   │   └── owner/            # Admin owner panel
 │   ├── lib/
@@ -113,15 +122,15 @@ srp-smartrecruit/
 ## Quick Start (Local Dev)
 
 ### Prerequisites
-- Node.js 20+
+- Node.js 22+
 - Docker Desktop
 - Git
 
 ### 1. Clone & configure
 
 ```bash
-git clone --recurse-submodules https://github.com/shashankpasikanti91-blip/smartrecruit.git
-cd smartrecruit
+git clone --recurse-submodules https://github.com/shashankpasikanti91-blip/srp-smartrecruit-auth.git
+cd srp-smartrecruit-auth
 
 # Backend environment
 cp .env.production.template .env
@@ -195,17 +204,15 @@ node migrate.js
 # SSH to server
 ssh root@5.223.67.236
 
-# Pull latest
-cd /opt/srp-smartrecruit-auth && git pull origin main
-cd /opt/srp-ats && git pull origin clean_main
-
-# Rebuild and restart Next.js
+# Pull latest + rebuild + restart Next.js app (Docker Compose)
 cd /opt/srp-smartrecruit-auth
-docker compose build --no-cache
-docker compose up -d
+git pull origin main
+docker compose build --no-cache app
+docker compose up -d --force-recreate app
 
-# Restart FastAPI (if system_prompts or backend code changed)
+# Restart FastAPI (if backend code / system_prompts changed)
 cd /opt/srp-ats
+git pull origin clean_main
 docker compose restart app
 
 # Verify
@@ -220,16 +227,19 @@ curl https://recruit.srpailabs.com/api/health
 Migrations are in `nextjs-auth/db/`. Run in order:
 
 ```
-migrate_v2.sql         → Base tables
-migrate_v3.sql         → Screening schema
-migrate_v4_demo_user.sql
-migrate_v5_enterprise.sql  → Multi-tenant, integrations
-migrate_v6_id_date_system.sql  → Short IDs (RES-/JOB-)
-migrate_v7_globalisation.sql
-migrate_v8_multitenant.sql     → Tenant isolation
-migrate_v8b_patch.sql
-migrate_v8c_final.sql           → API keys, audit columns
-migrate_v9_prod_fix.sql
+migrate_v2.sql                  → Base tables
+migrate_v3.sql                  → Screening schema
+migrate_v4_demo_user.sql        → Demo user seed
+migrate_v5_enterprise.sql       → Multi-tenant, integrations
+migrate_v6_id_date_system.sql   → Short IDs (RES-/JOB-)
+migrate_v7_globalisation.sql    → Globalisation fields
+migrate_v7_ai_screening_data.sql → ai_screening_data JSONB column + GIN index
+migrate_v8_multitenant.sql      → Tenant isolation
+migrate_v8b_patch.sql           → Tenant patch
+migrate_v8c_final.sql           → API keys, audit columns, token_usage tenant_id
+migrate_v9_prod_fix.sql         → Production fixes
+migrate_v10_invite_hardening.sql → Invite token hashing + expiry
+migrate_v11_dup_index.sql       → Partial unique index on (tenant_id, candidate_email)
 ```
 
 ---

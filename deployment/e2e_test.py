@@ -116,6 +116,7 @@ api_routes = [
     "/api/integrations", "/api/import", "/api/comm", "/api/notify",
     "/api/audit", "/api/boolean-search", "/api/parse",
     "/api/jd", "/api/compose", "/api/screen",
+    "/api/tenant", "/api/tenant/invite", "/api/tenant/members",
 ]
 for route in api_routes:
     status, body, err = http_get(f"{BASE_HTTPS}{route}")
@@ -139,6 +140,11 @@ db_checks = [
     ("resumes ai_skills",         "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='ai_skills';"),
     ("resumes updated_at",        "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='updated_at';"),
     ("resumes source_batch_id",   "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='source_batch_id';"),
+    # ai_screening_data (added migrate_v7_ai_screening_data.sql)
+    ("resumes ai_screening_data", "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='ai_screening_data';"),
+    # source_type + last_contacted_at (added in enterprise migration)
+    ("resumes source_type",       "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='source_type';"),
+    ("resumes last_contacted_at", "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='last_contacted_at';"),
     # Subscriptions
     ("subscriptions table",       "SELECT COUNT(*) FROM subscriptions LIMIT 1;"),
     # Integrations
@@ -164,6 +170,11 @@ db_checks = [
     ("jd_analysis_results",       "SELECT COUNT(*) FROM jd_analysis_results LIMIT 1;"),
     # Feature flags
     ("feature_flags table",       "SELECT COUNT(*) FROM feature_flags LIMIT 1;"),
+    # Invite hardening (migrate_v10) — indexes on tenant_members + auth_users
+    ("tenant_members_invite_token_idx", "SELECT indexname FROM pg_indexes WHERE tablename='tenant_members' AND indexname='tenant_members_invite_token_idx';"),
+    ("auth_users_email_active_idx",     "SELECT indexname FROM pg_indexes WHERE tablename='auth_users' AND indexname='auth_users_email_active_idx';"),
+    # Duplicate email index (migrate_v11)
+    ("resumes_tenant_email_idx",  "SELECT indexname FROM pg_indexes WHERE tablename='resumes' AND indexname='resumes_tenant_email_idx';"),
 ]
 for label, sql in db_checks:
     out, err = ssh_cmd(client, f'docker exec srp-auth-db psql -U srp_auth -d srp_auth -c "{sql}" 2>&1')

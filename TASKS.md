@@ -66,6 +66,16 @@
 - [x] Fix nginx: remove dead duplicate `recruit.srpailabs.com` block from `srpailabs.conf` (was routing to non-existent port 3004)
 - [x] Update `backend/app/main.py`: remove old `/app` Jinja2 render, keep `/app` → 301 → `/dashboard`
 
+### AI Screening Hardening & Token Savings (commits b5ade5b → 9c6ed8c)
+- [x] Fix: `ai_screening_data` was missing from `GET /api/candidates` SELECT — candidate modal "AI Screening" tab now shows full structured report
+- [x] Feat: Duplicate CV guard — amber warning + "View existing record" link when same email uploaded twice (409 response from resumes POST)
+- [x] Feat: Token-saving "From Candidates" screening mode — 3rd mode in AI Screening tab; picks candidates from DB by stored `raw_text`; `skipAlreadyScreened` toggle (default ON); shows savings count; zero re-API-calls for already-screened candidates
+- [x] Feat: `ai_screening_data` auto-saved to DB on every screen; displayed in modal without extra API call
+- [x] DB: `migrate_v11_dup_index.sql` — partial unique index on `(tenant_id, candidate_email)` applied to production
+- [x] DB: `migrate_v10_invite_hardening.sql` — invite token hashing + expiry applied to production
+- [x] Fix: Multi-tenant invite flow end-to-end (hashed token validation, accept page)
+- [x] Deployed all changes to production — Docker Compose build passed (Next.js 16.2.3)
+
 ## 🔄 In Progress
 ## ❌ Backlog / Next Sprint
 - [ ] File upload: server-side MIME type validation
@@ -91,35 +101,34 @@
 ## Deployment Reference
 
 ```bash
-# On Hetzner server — /opt/srp-ats/nextjs-auth
-git pull
-npm install
-npm run build
-pm2 restart smartrecruit-nextjs   # or: systemctl restart smartrecruit-nextjs
+# On Hetzner server — /opt/srp-smartrecruit-auth (Docker Compose)
+cd /opt/srp-smartrecruit-auth
+git pull origin main
+docker compose build --no-cache app
+docker compose up -d --force-recreate app
 
-# Full Docker rebuild
-cd /opt/srp-ats
-docker compose down
-docker compose up -d --build
-docker compose logs -f
+# Verify containers
+docker ps | grep srp
+curl https://recruit.srpailabs.com/api/health
 ```
 
 ## Project Structure (current)
 
 ```
 SRP Smartrecruit/
-├── nextjs-auth/                  # Next.js 14 App Router — PRIMARY FRONTEND
+├── nextjs-auth/                  # Next.js 16.2.3 App Router — PRIMARY FRONTEND
 │   ├── app/
-│   │   ├── dashboard/page.tsx    # Main dashboard (~3700 lines, all tabs)
+│   │   ├── dashboard/page.tsx    # Main dashboard (~4000 lines, all tabs)
 │   │   ├── globals.css           # Enterprise design system CSS
 │   │   ├── api/                  # Next.js API routes
 │   │   │   ├── audit/            # GET/POST audit logs
-│   │   │   ├── candidates/       # CRUD + stage changes
+│   │   │   ├── candidates/       # CRUD + stage changes + duplicate guard
 │   │   │   ├── jobs/             # Job CRUD
-│   │   │   ├── screen/           # AI screening
+│   │   │   ├── screen/           # AI screening + ai_screening_data persistence
 │   │   │   ├── import/           # CSV bulk import
 │   │   │   ├── jd/               # JD generation
-│   │   │   ├── boolean/          # Boolean search
+│   │   │   ├── boolean-search/   # Boolean search
+│   │   │   ├── tenant/           # Multi-tenant invite flow
 │   │   │   └── ...
 │   ├── lib/
 │   │   ├── audit.ts              # Fire-and-forget logAudit()
@@ -127,8 +136,11 @@ SRP Smartrecruit/
 │   │   └── auth.ts               # NextAuth config
 │   └── db/
 │       ├── schema.sql            # Base schema
-│       ├── migrate_v5_enterprise.sql  # Enterprise tables
-│       └── migrate_v6_audit_trail.sql # audit_logs table (Phase 8)
+│       ├── migrate_v5_enterprise.sql
+│       ├── migrate_v7_ai_screening_data.sql  # ai_screening_data JSONB column
+│       ├── migrate_v8c_final.sql             # API keys, audit columns
+│       ├── migrate_v10_invite_hardening.sql  # Invite token hashing
+│       └── migrate_v11_dup_index.sql         # Partial email uniqueness index
 ├── backend/                      # Legacy FastAPI backend (v3.2)
 ├── frontend/                     # Legacy HTML templates
 ├── docs/                         # Technical documentation
