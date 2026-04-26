@@ -120,7 +120,8 @@ api_routes = [
 ]
 for route in api_routes:
     status, body, err = http_get(f"{BASE_HTTPS}{route}")
-    ok = status in (200, 401, 403, 405) and status != 500
+    # 400 = valid: route is live but requires specific inputs (e.g. /api/tenant/invite needs ?token=)
+    ok = status in (200, 400, 401, 403, 405) and status != 500
     check(f"API guard {route}", ok, f"status={status} {err or body[:60]}")
 
 # ── Database checks via SSH ───────────────────────────────
