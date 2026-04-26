@@ -841,6 +841,8 @@ STRICT RULES:
 - Do NOT use buzzwords like "dynamic", "disruptive", "passionate rockstar".
 - Do NOT use filler phrases.
 - Write as a real senior recruiter would write.
+- Use ONLY standard bullet characters: • (bullet point) or numbers (1. 2. 3.) for lists.
+- Do NOT use □, ☐, ■, ▪, or any other Unicode box/special symbols.
 - Return JSON ONLY. No markdown. No extra text.
 
 JD Structure required:
