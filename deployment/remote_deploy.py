@@ -25,6 +25,16 @@ COMMANDS = [
      "docker cp db/migrate_v6_id_date_system.sql srp-auth-db:/tmp/migrate_v6.sql && "
      "docker exec srp-auth-db psql -U srp_auth -d srp_auth -f /tmp/migrate_v6.sql 2>&1 | tail -5"),
 
+    ("Applying v7 globalisation DB migration (interviews, calendar, email_oauth, triggers)",
+     "cd /opt/srp-smartrecruit-auth && "
+     "docker cp db/migrate_v7_globalisation.sql srp-auth-db:/tmp/migrate_v7.sql && "
+     "docker exec srp-auth-db psql -U srp_auth -d srp_auth -f /tmp/migrate_v7.sql 2>&1 | tail -10"),
+
+    ("Ensuring uploads directory exists inside Next.js container",
+     "docker exec srp-auth-app mkdir -p /app/uploads/resumes && "
+     "docker exec srp-auth-app chmod 777 /app/uploads && "
+     "echo 'uploads dir ready'"),
+
     ("Rebuilding Next.js Docker image (this may take 2-3 min)",
      "cd /opt/srp-smartrecruit-auth && docker compose build --no-cache app 2>&1 | tail -10"),
 
