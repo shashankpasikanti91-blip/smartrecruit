@@ -83,6 +83,19 @@ jobs:
 
             sudo systemctl reload nginx 2>/dev/null || true
             docker image prune -f 2>/dev/null || true
+
+            echo "=== [6/6] Install daily backup cron (idempotent) ==="
+            if [ ! -f /usr/local/bin/srp-backup ]; then
+              sudo bash /opt/srp-ats/deployment/install_backup_cron.sh
+              echo "✅ Backup cron installed"
+            else
+              # Update the script in case it changed
+              sudo sed -i 's/\r//' /opt/srp-ats/deployment/backup_daily.sh
+              sudo cp /opt/srp-ats/deployment/backup_daily.sh /usr/local/bin/srp-backup
+              sudo chmod 750 /usr/local/bin/srp-backup
+              echo "✅ Backup script updated"
+            fi
+
             echo "✅ Backend deploy complete"
 
       # ── E2E: HTTP checks against the live HTTPS domain ──────────────
