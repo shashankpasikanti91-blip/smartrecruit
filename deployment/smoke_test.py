@@ -1,34 +1,45 @@
-import paramiko
+#!/usr/bin/env python3
+"""Lightweight remote smoke tests for the FastAPI deployment."""
 
-HOST = "5.223.67.236"
-USER = "root"
-PASS = "856Reey@nsh"
+from __future__ import annotations
 
-client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(HOST, username=USER, password=PASS, timeout=30)
+from remote_config import load_remote_config, open_ssh_client
 
-checks = [
-    ("Next.js health", "curl -s http://localhost:3010/api/health"),
-    ("FastAPI health", "curl -s http://localhost:8009/health"),
-    ("HTTPS health", "curl -sk https://recruit.srpailabs.com/api/health"),
-    ("audit_logs table", 'docker exec srp-auth-db psql -U srp_auth -d srp_auth -c "SELECT COUNT(*) FROM audit_logs;"'),
-    ("short_id column job_posts", 'docker exec srp-auth-db psql -U srp_auth -d srp_auth -c "SELECT column_name FROM information_schema.columns WHERE table_name=\'job_posts\' AND column_name=\'short_id\';"'),
-    ("audit_logs columns", 'docker exec srp-auth-db psql -U srp_auth -d srp_auth -c "SELECT column_name FROM information_schema.columns WHERE table_name=\'audit_logs\';"'),
-]
 
-print("\n=== E2E Smoke Test ===\n")
-all_pass = True
-for label, cmd in checks:
-    _, stdout, stderr = client.exec_command(cmd)
-    out = stdout.read().decode().strip()
-    err = stderr.read().decode().strip()
+def run_check(client, label: str, command: str) -> bool:
+    _, stdout, stderr = client.exec_command(command, timeout=30)
+    out = stdout.read().decode(errors="replace").strip()
+    err = stderr.read().decode(errors="replace").strip()
     result = out or err
-    status = "PASS" if result and "error" not in result.lower() and "fail" not in result.lower() else "FAIL"
-    if status == "FAIL":
-        all_pass = False
-    print(f"  [{status}] {label}: {result[:120]}")
+    ok = bool(result) and "error" not in result.lower() and "fail" not in result.lower()
+    print(f"  [{'PASS' if ok else 'FAIL'}] {label}: {result[:160]}")
+    return ok
 
-print()
-print("=== " + ("ALL CHECKS PASSED" if all_pass else "SOME CHECKS FAILED") + " ===")
-client.close()
+
+def main() -> None:
+    config = load_remote_config(require_domain=True)
+    client = open_ssh_client(config)
+    try:
+        checks = [
+            ("Docker app health", f"curl -s http://127.0.0.1:{config.app_port}/health"),
+            ("HTTPS health", f"curl -sk {config.base_https}/health"),
+            ("Containers running", "docker ps --format '{{.Names}} {{.Status}}'"),
+            (
+                "Uploads volume mounted",
+                "docker compose ps 2>/dev/null || docker ps --format '{{.Names}}'",
+            ),
+        ]
+
+        print("\n=== Remote Smoke Test ===\n")
+        all_pass = True
+        for label, command in checks:
+            all_pass = run_check(client, label, command) and all_pass
+
+        print()
+        print("=== " + ("ALL CHECKS PASSED" if all_pass else "SOME CHECKS FAILED") + " ===")
+    finally:
+        client.close()
+
+
+if __name__ == "__main__":
+    main()

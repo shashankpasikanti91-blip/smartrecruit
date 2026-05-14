@@ -1,9 +1,19 @@
 # SRP SmartRecruit — AI-Powered ATS
 
 **Live:** https://recruit.srpailabs.com  
-**Stack:** Next.js 16 · TypeScript · FastAPI · PostgreSQL · Docker · Tailwind CSS
+**Primary checked-in stack:** FastAPI · PostgreSQL · Docker · Jinja/static frontend assets
 
 AI-powered Applicant Tracking System for sourcing, screening, tracking, and hiring talent.
+
+---
+
+## Repository Scope
+
+This checkout is primarily the **FastAPI ATS backend** plus static/template frontend assets and deployment helpers.
+
+- The repository **does not contain** the separate Next.js/auth app referenced in some legacy deployment notes.
+- Current data isolation in this backend is **user-level ownership** (`user_id` scoping), not a full organization/tenant model.
+- Production deployments should keep legacy compatibility routes disabled unless they are explicitly needed.
 
 ---
 
@@ -22,8 +32,8 @@ AI-powered Applicant Tracking System for sourcing, screening, tracking, and hiri
 | **Boolean Search** | Advanced sourcing query builder |
 | **Candidate Tracker** | Filter by stage, match, job, skill, date. Source + phone visible |
 | **Job Filter** | Filter jobs by status (Active/Closed/Draft) and type (Full-time/Contract/Remote/…) |
-| **Multi-Tenant** | Each company is fully isolated — all queries scoped to `tenant_id` |
-| **Multi-Tenant Invite** | Owner invites team members by email; invite token validated + hashed; one-click accept flow |
+| **User Isolation** | Current backend scopes owned ATS records by `user_id`; this repo does not yet implement an org/team tenant model |
+| **Session Security** | Single-session login, explicit logout invalidation, and stricter optional-auth checks |
 | **Google OAuth** | One-click sign-in via NextAuth + Google Cloud |
 | **Owner Panel** | Admin view — users, activity log, token usage, subscriptions |
 | **Telegram + Email** | Real-time notifications on signup, login, errors |
@@ -41,14 +51,13 @@ Internet
    │
    ▼
 nginx (HTTPS — recruit.srpailabs.com)
-   ├── / → Next.js  :3010  (UI, auth, API routes)
-   └── /api/v1/*  → FastAPI  :8009  (AI screening, JD gen, boolean, comms)
+   └── / → FastAPI :8009  (landing page + ATS APIs in this repo)
 
 Docker Compose (docker-compose.yml)
-   ├── srp-auth-app    — Next.js 14 (TypeScript)
-   ├── srp-auth-db     — PostgreSQL 16
    ├── srp-ats-app     — FastAPI (Python 3.11)
    └── srp-ats-db      — PostgreSQL 16
+
+Optional external services may exist in production, but they are not part of this checkout.
 ```
 
 ---
@@ -129,17 +138,13 @@ srp-smartrecruit/
 ### 1. Clone & configure
 
 ```bash
-git clone --recurse-submodules https://github.com/shashankpasikanti91-blip/srp-smartrecruit-auth.git
-cd srp-smartrecruit-auth
+git clone YOUR_REPO_URL
+cd srp-smartrecruit
 
 # Backend environment
 cp .env.production.template .env
 # Edit .env — set OPENAI_API_KEY, POSTGRES_PASSWORD, SECRET_KEY
 
-# Frontend environment
-cd nextjs-auth
-cp .env.local.example .env.local
-# Edit .env.local — set NEXTAUTH_SECRET, GOOGLE_CLIENT_ID/SECRET, DATABASE_URL
 ```
 
 ### 2. Run with Docker
@@ -152,15 +157,14 @@ docker compose -f docker-compose.dev.yml up -d --build
 docker compose logs -f
 ```
 
-- **Frontend:** http://localhost:3000
-- **API docs (FastAPI):** http://localhost:8009/docs
+- **App:** http://localhost:8767
+- **API docs (FastAPI):** http://localhost:8767/docs
 
-### 3. Run migrations
+### 3. Initialize schema (development only)
 
 ```bash
-# Connect to the Next.js Postgres container and run migrations
-cd nextjs-auth/db
-node migrate.js
+# In development the backend can auto-create tables when DB_AUTO_INIT=true.
+# In production, keep DB_AUTO_INIT=false and use an explicit migration/init process.
 ```
 
 ---

@@ -7,10 +7,12 @@ Set DATABASE_URL in your .env file.
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+import logging
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 # PostgreSQL is required — no SQLite fallback
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -34,6 +36,7 @@ if not DATABASE_URL.startswith("postgresql"):
 
 # Disable SQL echo in production
 _SQL_ECHO = os.getenv("ENVIRONMENT", "development").lower() not in ("production", "prod")
+_DB_AUTO_INIT = os.getenv("DB_AUTO_INIT", "true" if _SQL_ECHO else "false").lower() == "true"
 
 engine = create_engine(
     DATABASE_URL,
@@ -65,13 +68,17 @@ def get_db():
 
 
 def init_db():
-    """Initialize database - create all tables"""
+    """Initialize database schema when auto-init is enabled."""
     # Import all models here to register them with Base
     from app.models import user, resume, screening, support
-    
-    # Create tables
+
+    if not _DB_AUTO_INIT:
+        logger.info("Database auto-init is disabled; skipping schema creation.")
+        return False
+
     Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created successfully")
+    logger.info("Database tables created successfully")
+    return True
 
 
 def drop_all_tables():

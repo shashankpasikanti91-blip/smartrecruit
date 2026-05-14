@@ -1,115 +1,74 @@
 #!/usr/bin/env python3
-"""
-SRP SmartRecruit v5 — Remote deploy via SSH (password auth)
-Usage: python remote_deploy.py
-"""
-import sys, time
-import paramiko
+"""Remote deployment helper for the checked-in FastAPI service."""
 
-HOST = "5.223.67.236"
-USER = "root"
-PASS = "856Reey@nsh"
+from __future__ import annotations
 
-COMMANDS = [
-    # ── Next.js: pull + migrate DB + rebuild ──────────────────────────────
-    ("Pulling Next.js code (main branch)",
-     "cd /opt/srp-smartrecruit-auth && git fetch origin && git checkout main && git pull origin main"),
+import sys
 
-    ("Applying v5 enterprise DB migration",
-     "cd /opt/srp-smartrecruit-auth && "
-     "docker cp db/migrate_v5_enterprise.sql srp-auth-db:/tmp/migrate_v5.sql && "
-     "docker exec srp-auth-db psql -U srp_auth -d srp_auth -f /tmp/migrate_v5.sql 2>&1 | tail -20"),
+from remote_config import load_remote_config, open_ssh_client
 
-    ("Applying v6 short_id/audit_logs DB migration",
-     "cd /opt/srp-smartrecruit-auth && "
-     "docker cp db/migrate_v6_id_date_system.sql srp-auth-db:/tmp/migrate_v6.sql && "
-     "docker exec srp-auth-db psql -U srp_auth -d srp_auth -f /tmp/migrate_v6.sql 2>&1 | tail -5"),
 
-    ("Applying v7 globalisation DB migration (interviews, calendar, email_oauth, triggers)",
-     "cd /opt/srp-smartrecruit-auth && "
-     "docker cp db/migrate_v7_globalisation.sql srp-auth-db:/tmp/migrate_v7.sql && "
-     "docker exec srp-auth-db psql -U srp_auth -d srp_auth -f /tmp/migrate_v7.sql 2>&1 | tail -10"),
-
-    ("Ensuring uploads directory exists inside Next.js container",
-     "docker exec srp-auth-app mkdir -p /app/uploads/resumes && "
-     "docker exec srp-auth-app chmod 777 /app/uploads && "
-     "echo 'uploads dir ready'"),
-
-    ("Rebuilding Next.js Docker image (this may take 2-3 min)",
-     "cd /opt/srp-smartrecruit-auth && docker compose build --no-cache app 2>&1 | tail -10"),
-
-    ("Restarting Next.js container",
-     "cd /opt/srp-smartrecruit-auth && docker compose up -d app 2>&1"),
-
-    ("Checking Next.js health",
-     "sleep 8 && curl -sf -o /dev/null -w 'HTTP %{http_code}' http://localhost:3010/api/health || echo 'not ready yet'"),
-
-    # ── FastAPI backend: pull + install packages + restart ────────────────
-    ("Pulling FastAPI backend (clean_main branch)",
-     "cd /opt/srp-ats && git fetch origin && git checkout clean_main && git pull origin clean_main"),
-
-    ("Installing new Python packages (pycryptodome, httpx)",
-     "cd /opt/srp-ats && "
-     "( [ -f .venv/bin/pip ] && .venv/bin/pip install -q pycryptodome httpx ) || "
-     "( [ -f venv/bin/pip ] && venv/bin/pip install -q pycryptodome httpx ) || "
-     "pip install -q pycryptodome httpx"),
-
-    ("Restarting FastAPI service",
-     "sudo systemctl restart srp-smartrecruit 2>/dev/null || "
-     "sudo systemctl restart srp-ats 2>/dev/null || "
-     "( cd /opt/srp-ats && docker compose restart app 2>/dev/null ) || "
-     "echo 'WARNING: could not detect service name — restart manually'"),
-
-    ("Checking FastAPI health",
-     "sleep 5 && curl -sf http://127.0.0.1:8009/health 2>/dev/null | python3 -c \""
-     "import sys,json; d=json.load(sys.stdin); print('FastAPI:', d.get('status','?'))\" "
-     "2>/dev/null || echo 'FastAPI: not responding'"),
-
-    # ── Reload nginx ──────────────────────────────────────────────────────
-    ("Reloading nginx",
-     "sudo systemctl reload nginx && echo 'nginx reloaded'"),
-]
-
-def run_step(client, label, cmd, timeout=180):
-    print(f"\n{'='*60}")
+def run_step(client, label: str, command: str, timeout: int = 180) -> str:
+    print(f"\n{'=' * 60}")
     print(f"  {label}")
-    print(f"{'='*60}")
-    stdin, stdout, stderr = client.exec_command(cmd, timeout=timeout, get_pty=False)
-    out = stdout.read().decode(errors='replace').strip()
-    err = stderr.read().decode(errors='replace').strip()
+    print(f"{'=' * 60}")
+    _, stdout, stderr = client.exec_command(command, timeout=timeout, get_pty=False)
+    out = stdout.read().decode(errors="replace").strip()
+    err = stderr.read().decode(errors="replace").strip()
     if out:
         print(out)
     if err:
-        # Many commands write informational output to stderr — show but don't abort
         print(f"[stderr] {err[:800]}")
     return out
 
-def main():
-    print("=== SRP SmartRecruit v5 Remote Deploy ===")
-    print(f"Connecting to {USER}@{HOST}…")
 
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+def main() -> None:
+    config = load_remote_config()
+    commands = [
+        (
+            "Pull latest code",
+            f"cd {config.project_dir} && git fetch origin && git pull --ff-only",
+        ),
+        (
+            "Rebuild and restart app",
+            f"cd {config.project_dir} && docker compose up -d --build",
+        ),
+        (
+            "Check local app health",
+            f"sleep 5 && curl -sf http://127.0.0.1:{config.app_port}/health",
+        ),
+        (
+            "Reload nginx if present",
+            "sudo systemctl reload nginx 2>/dev/null || echo 'nginx reload skipped'",
+        ),
+    ]
+
+    print("=== SRP SmartRecruit Remote Deploy ===")
+    print(f"Connecting to {config.user}@{config.host}:{config.port}")
+    if config.ssh_key_path:
+        print(f"Using SSH key: {config.ssh_key_path}")
+    else:
+        print("Using password authentication because SRP_ALLOW_PASSWORD_AUTH=true")
+
     try:
-        client.connect(HOST, username=USER, password=PASS, timeout=15,
-                       look_for_keys=False, allow_agent=False)
-    except Exception as e:
-        print(f"SSH connect failed: {e}")
+        client = open_ssh_client(config)
+    except Exception as exc:
+        print(f"SSH connect failed: {exc}")
         sys.exit(1)
 
-    print("Connected!\n")
+    print("Connected.")
+    try:
+        for label, command in commands:
+            run_step(client, label, command)
+    finally:
+        client.close()
 
-    for label, cmd in COMMANDS:
-        try:
-            result = run_step(client, label, cmd)
-        except Exception as e:
-            print(f"[ERROR] {e}")
+    print("\n" + "=" * 60)
+    print("Deploy completed.")
+    if config.domain:
+        print(f"Health URL: https://{config.domain}/health")
+    print("=" * 60)
 
-    client.close()
-    print("\n" + "="*60)
-    print("  Deploy complete!")
-    print("  Live URL: https://recruit.srpailabs.com/dashboard")
-    print("="*60)
 
 if __name__ == "__main__":
     main()

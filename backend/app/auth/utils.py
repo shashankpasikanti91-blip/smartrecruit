@@ -8,6 +8,7 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from typing import Optional
 import random
+import secrets
 import string
 import os
 from dotenv import load_dotenv
@@ -15,13 +16,33 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # JWT Settings
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production-v3-2")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
+IS_PRODUCTION = ENVIRONMENT in ("production", "prod")
+_INSECURE_SECRET_KEYS = {
+    "",
+    "your-secret-key-change-in-production-v3-2",
+    "change-this",
+    "changeme",
+    "secret",
+}
+SECRET_KEY = os.getenv("SECRET_KEY", "")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
 # OTP Settings
 OTP_EXPIRE_MINUTES = int(os.getenv("OTP_EXPIRE_MINUTES", "10"))
 REQUIRE_OTP_ON_LOGIN = os.getenv("REQUIRE_OTP_ON_LOGIN", "False").lower() == "true"
+
+
+if IS_PRODUCTION:
+    secret = SECRET_KEY.strip()
+    if secret in _INSECURE_SECRET_KEYS or len(secret) < 32:
+        raise RuntimeError(
+            "SECRET_KEY must be set to a strong random value in production environments."
+        )
+elif not SECRET_KEY:
+    # Keep local development usable without checking in a reusable secret.
+    SECRET_KEY = secrets.token_urlsafe(48)
 
 
 def hash_password(password: str) -> str:

@@ -15,6 +15,41 @@ from app.auth.utils import decode_access_token
 security = HTTPBearer()
 
 
+def _get_user_id_from_token(token: str) -> Optional[int]:
+    payload = decode_access_token(token)
+    if payload is None:
+        return None
+
+    user_id_raw = payload.get("sub")
+    if user_id_raw is None:
+        return None
+
+    try:
+        return int(user_id_raw)
+    except (ValueError, TypeError):
+        return None
+
+
+def _get_valid_session_user(db: Session, token: str) -> Optional[User]:
+    user_id = _get_user_id_from_token(token)
+    if user_id is None:
+        return None
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None or not user.is_active:
+        return None
+
+    session = db.query(UserSession).filter(
+        UserSession.user_id == user_id,
+        UserSession.jwt_token == token,
+        UserSession.is_active == True
+    ).first()
+    if session is None:
+        return None
+
+    return user
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
@@ -25,34 +60,14 @@ async def get_current_user(
     """
     token = credentials.credentials
     
-    # Decode token
-    payload = decode_access_token(token)
-    if payload is None:
+    user_id = _get_user_id_from_token(token)
+    if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    user_id_raw = payload.get("sub")
-    if user_id_raw is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials"
-        )
-    try:
-        user_id: int = int(user_id_raw)
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials"
-        )
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials"
-        )
-    
+
     # Get user from database
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
@@ -118,19 +133,9 @@ async def get_optional_user(
     """
     if credentials is None:
         return None
-    
+
     try:
-        token = credentials.credentials
-        payload = decode_access_token(token)
-        if payload is None:
-            return None
-        
-        user_id: int = payload.get("sub")
-        if user_id is None:
-            return None
-        
-        user = db.query(User).filter(User.id == user_id).first()
-        return user
+        return _get_valid_session_user(db, credentials.credentials)
     except Exception:
         return None
 

@@ -18,7 +18,7 @@ import json
 from datetime import datetime
 
 from app.database.connection import get_db
-from app.auth.dependencies import get_optional_user
+from app.auth.dependencies import get_optional_user, get_current_admin_user, get_current_verified_user
 from app.models.user import User
 from app.models.screening import ScreeningResult
 
@@ -1478,8 +1478,11 @@ async def upload_bulk_resumes(
 # ============================================================================
 
 @router.get("/logs")
-async def get_logs(db: Session = Depends(get_db)):
-    """Get system activity logs from database"""
+async def get_logs(
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get system activity logs for administrators only."""
     try:
         logs = []
         
@@ -1522,7 +1525,7 @@ async def get_logs(db: Session = Depends(get_db)):
             ]
             logger.warning("Using fallback logs")
         
-        return {"logs": logs, "count": len(logs)}
+        return {"logs": logs, "count": len(logs), "scope": "admin"}
     
     except Exception as e:
         logger.debug("Error in /api/logs: %s", e)
@@ -1532,13 +1535,21 @@ async def get_logs(db: Session = Depends(get_db)):
 
 
 @router.get("/screening-results")  
-async def get_screening_results(current_user: Optional[User] = Depends(get_optional_user), db: Session = Depends(get_db)):
-    """Get all screening results from database"""
+async def get_screening_results(
+    current_user: User = Depends(get_current_verified_user),
+    db: Session = Depends(get_db)
+):
+    """Get screening results scoped to the current authenticated user."""
     logger.debug("[SCREENING-RESULTS] Endpoint called")
     try:
-        # Use the same ORM query that works in /api/logs endpoint
         logger.debug("[SCREENING-RESULTS] Querying database...")
-        screening_results = db.query(ScreeningResult).order_by(ScreeningResult.created_at.desc()).limit(50).all()
+        query = db.query(ScreeningResult).filter(
+            ScreeningResult.status == "completed"
+        )
+        if current_user.role != "admin":
+            query = query.filter(ScreeningResult.user_id == current_user.id)
+
+        screening_results = query.order_by(ScreeningResult.created_at.desc()).limit(50).all()
         logger.debug("[SCREENING-RESULTS] Query returned {len(screening_results)} results")
         
         results = []
@@ -1547,7 +1558,8 @@ async def get_screening_results(current_user: Optional[User] = Depends(get_optio
                 "id": result.id,
                 "score": result.score,
                 "recommendation": result.recommendation,
-                "created_at": result.created_at.isoformat() if result.created_at else None
+                "created_at": result.created_at.isoformat() if result.created_at else None,
+                "scope": "admin" if current_user.role == "admin" else "user",
             })
         
         logger.debug("[SCREENING-RESULTS] Returning {len(results)} results")

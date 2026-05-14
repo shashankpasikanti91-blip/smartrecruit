@@ -217,13 +217,20 @@ class AuthService:
         Steps:
         1. Find user
         2. Generate OTP
-        3. Return success (OTP would be sent via email)
+        3. Return a generic success message
         """
         user = db.query(User).filter(User.email == email).first()
         if not user:
             # Don't reveal that user doesn't exist
             return {"message": "If the email exists, an OTP has been sent."}
-        
+
+        # Invalidate older unused reset codes so only the newest OTP can be used.
+        db.query(OTPVerification).filter(
+            OTPVerification.user_id == user.id,
+            OTPVerification.purpose == "password_reset",
+            OTPVerification.used == False
+        ).update({"used": True})
+
         # Generate OTP
         otp_code = generate_otp()
         otp = OTPVerification(
@@ -235,12 +242,9 @@ class AuthService:
         )
         db.add(otp)
         db.commit()
-        
-        # In production, send OTP via email
-        return {
-            "message": "OTP sent to your email",
-            "otp_code": otp_code  # REMOVE IN PRODUCTION
-        }
+
+        # OTP delivery should happen out-of-band (email/SMS). Never return it in the API.
+        return {"message": "If the email exists, an OTP has been sent."}
     
     @staticmethod
     def reset_password(db: Session, email: str, otp_code: str, new_password: str) -> dict:

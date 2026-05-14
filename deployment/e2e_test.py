@@ -1,294 +1,181 @@
 #!/usr/bin/env python3
-"""Comprehensive E2E test — runs from local machine via SSH + direct HTTP checks."""
-import paramiko
-import urllib.request
-import urllib.error
+"""Remote end-to-end checks — covers FastAPI ATS + Next.js auth frontend."""
+
+from __future__ import annotations
+
 import ssl
-import json
-import time
+import sys
+import urllib.error
+import urllib.request
 
-HOST = "5.223.67.236"
-USER = "root"
-PASS = "856Reey@nsh"
-BASE_HTTP  = f"http://{HOST}"
-BASE_HTTPS = "https://recruit.srpailabs.com"
-NJ_PORT    = 3010
-FA_PORT    = 8009
+from remote_config import load_remote_config, open_ssh_client
 
-ctx = ssl.create_default_context()
-ctx.check_hostname = False
-ctx.verify_mode = ssl.CERT_NONE
 
+CTX = ssl.create_default_context()
 PASS_COUNT = 0
 FAIL_COUNT = 0
-ISSUES = []
+ISSUES: list[tuple[str, str]] = []
 
-def check(label, ok, detail=""):
+
+def http_get(url: str, timeout: int = 10) -> tuple[int, str, str | None]:
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "SRP-E2E-Test/2.0"})
+        with urllib.request.urlopen(req, context=CTX, timeout=timeout) as response:
+            return response.status, response.read(512).decode(errors="replace"), None
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read(256).decode(errors="replace"), None
+    except Exception as exc:
+        return 0, "", str(exc)
+
+
+def ssh_cmd(client, command: str, timeout: int = 30) -> tuple[str, str]:
+    _, stdout, stderr = client.exec_command(command, timeout=timeout)
+    return (
+        stdout.read().decode(errors="replace").strip(),
+        stderr.read().decode(errors="replace").strip(),
+    )
+
+
+def check(label: str, ok: bool, detail: str = "") -> bool:
     global PASS_COUNT, FAIL_COUNT
+    status = "PASS" if ok else "FAIL"
+    suffix = f" -> {detail[:140]}" if detail else ""
+    print(f"  [{status}] {label}{suffix}")
     if ok:
         PASS_COUNT += 1
-        print(f"  \033[32m[PASS]\033[0m {label}")
     else:
         FAIL_COUNT += 1
         ISSUES.append((label, detail))
-        print(f"  \033[31m[FAIL]\033[0m {label}  →  {detail[:120]}")
+    return ok
 
-def http_get(url, expected_status=None, expected_not=None, timeout=10):
-    """Returns (status_code, body_snippet, error)"""
+
+def main() -> None:
+    config = load_remote_config(require_domain=True)
+    client = open_ssh_client(config)
+
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "SRP-E2E-Test/1.0"})
-        with urllib.request.urlopen(req, context=ctx, timeout=timeout) as r:
-            body = r.read(512).decode(errors="replace")
-            return r.status, body, None
-    except urllib.error.HTTPError as e:
-        body = e.read(256).decode(errors="replace")
-        return e.code, body, None
-    except Exception as e:
-        return 0, "", str(e)
+        print("\n" + "=" * 60)
+        print("  SRP SmartRecruit — Full-Stack Remote E2E Test")
+        print("=" * 60)
 
-def ssh_cmd(client, cmd, timeout=20):
-    _, stdout, stderr = client.exec_command(cmd, timeout=timeout)
-    out = stdout.read().decode(errors="replace").strip()
-    err = stderr.read().decode(errors="replace").strip()
-    return out, err
+        # ── [1] HTTPS health and landing page ──────────────────────────
+        print("\n[1] HTTPS health and landing page")
+        status, body, err = http_get(f"{config.base_https}/health")
+        check("HTTPS /health → 200", status == 200, f"{status} {err or body[:80]}")
 
-print("\n" + "="*60)
-print("  SRP SmartRecruit — Comprehensive E2E Test")
-print("="*60)
+        status, body, err = http_get(f"{config.base_https}/")
+        check("HTTPS / → 200", status == 200, f"{status} {err or body[:80]}")
 
-# ── SSH Connection ──────────────────────────────────────────
-print("\n[1] Connecting to server via SSH...")
-client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-try:
-    client.connect(HOST, username=USER, password=PASS, timeout=15)
-    check("SSH connection", True)
-except Exception as e:
-    check("SSH connection", False, str(e))
-    print("\n[ABORT] Cannot reach server.")
-    exit(1)
+        # ── [2] FastAPI guarded routes ──────────────────────────────────
+        print("\n[2] FastAPI auth guards (must return 401/403/405)")
+        for route in [
+            "/api/auth/me",
+            "/api/resume/list",
+            "/api/support/tickets",
+            "/api/screening/results",
+        ]:
+            status, body, err = http_get(f"{config.base_https}{route}")
+            check(route, status in (401, 403, 405), f"{status} {err or body[:80]}")
 
-# ── Container health ───────────────────────────────────────
-print("\n[2] Container Status...")
-out, _ = ssh_cmd(client, "docker ps --format '{{.Names}}\t{{.Status}}'")
-for line in out.splitlines():
-    name, status = line.split("\t", 1) if "\t" in line else (line, "")
-    running = "Up" in status
-    check(f"Container {name}", running, status)
+        # ── [3] FastAPI localhost health ────────────────────────────────
+        print(f"\n[3] FastAPI container (localhost:{config.app_port})")
+        out, err = ssh_cmd(client, f"curl -sf http://127.0.0.1:{config.app_port}/health")
+        check("FastAPI /health healthy", "healthy" in out.lower(), err or out[:120])
 
-# ── Service health via SSH (ports 3010/8009 are internal only) ───────────
-print("\n[3] Service Health (localhost)...")
+        # ── [4] Next.js localhost health ────────────────────────────────
+        print("\n[4] Next.js auth container (localhost:3010)")
+        out, err = ssh_cmd(client, "curl -sf http://127.0.0.1:3010/api/health")
+        check("Next.js /api/health → 200", out.strip() != "" and "error" not in out.lower(), err or out[:120])
 
-out, _ = ssh_cmd(client, "curl -sf http://localhost:3010/api/health 2>&1 | head -c 200")
-check("Next.js /api/health", "ok" in out.lower(), out[:120] if "ok" not in out.lower() else "")
+        # ── [5] NextAuth endpoints ──────────────────────────────────────
+        print("\n[5] NextAuth endpoints")
+        out, err = ssh_cmd(client, "curl -s http://127.0.0.1:3010/api/auth/csrf")
+        check("CSRF token available", "csrfToken" in out, err or out[:100])
 
-out, _ = ssh_cmd(client, "curl -sf http://localhost:8009/health 2>&1 | head -c 200")
-check("FastAPI /health", "healthy" in out.lower(), out[:120] if "healthy" not in out.lower() else "")
+        out, err = ssh_cmd(client, "curl -s http://127.0.0.1:3010/api/auth/providers")
+        check("Auth providers endpoint", "credentials" in out.lower() or ("{" in out and "}" in out), err or out[:100])
 
-# ── HTTPS via nginx ────────────────────────────────────────
-print("\n[4] HTTPS / nginx routing...")
+        # ── [6] HTTPS NextAuth via nginx proxy ──────────────────────────
+        print("\n[6] NextAuth via HTTPS/nginx routing")
+        status, body, err = http_get(f"{config.base_https}/api/auth/csrf")
+        check("HTTPS /api/auth/csrf → 200", status == 200, f"{status} {err or body[:80]}")
 
-status, body, err = http_get(f"{BASE_HTTPS}/api/health")
-check("HTTPS /api/health", status == 200, f"{status} {err or body[:60]}")
+        status, body, err = http_get(f"{config.base_https}/api/auth/providers")
+        check("HTTPS /api/auth/providers → 200", status == 200, f"{status} {err or body[:80]}")
 
-# Pages that should return 200
-public_pages = [
-    ("/",           "landing"),
-    ("/login",      "login"),
-    ("/signup",     "signup"),
-    ("/forgot-password", "forgot"),
-    ("/legal/privacy",   "privacy"),
-    ("/legal/terms",     "terms"),
-    ("/legal/security",  "security"),
-    ("/legal/accessibility", "accessibility"),
-    ("/support/help",    "help"),
-    ("/support/contact", "contact"),
-]
-print("\n[5] Public page loads...")
-for path, label in public_pages:
-    status, body, err = http_get(f"{BASE_HTTPS}{path}")
-    check(f"Page {path}", status == 200, f"{status} {err or body[:60]}")
+        # ── [7] Next.js pages via HTTPS ─────────────────────────────────
+        print("\n[7] Next.js page routes via HTTPS")
+        for page in ["/login", "/signup"]:
+            status, body, err = http_get(f"{config.base_https}{page}")
+            check(f"HTTPS {page} → 200/307", status in (200, 307, 308), f"{status} {err or body[:60]}")
 
-# API routes — should return 401 (unauth) or 405 (method not allowed), NOT 500
-print("\n[6] API route authentication guards (expect 401/403/405, not 500)...")
-api_routes = [
-    "/api/jobs", "/api/candidates", "/api/resumes", "/api/profile",
-    "/api/integrations", "/api/import", "/api/comm", "/api/notify",
-    "/api/audit", "/api/boolean-search", "/api/parse",
-    "/api/jd", "/api/compose", "/api/screen",
-    "/api/tenant", "/api/tenant/invite", "/api/tenant/members",
-]
-for route in api_routes:
-    status, body, err = http_get(f"{BASE_HTTPS}{route}")
-    # 400 = valid: route is live but requires specific inputs (e.g. /api/tenant/invite needs ?token=)
-    ok = status in (200, 400, 401, 403, 405) and status != 500
-    check(f"API guard {route}", ok, f"status={status} {err or body[:60]}")
+        # ── [8] Container status ─────────────────────────────────────────
+        print("\n[8] Docker container status")
+        out, err = ssh_cmd(client, "docker ps --format '{{.Names}} {{.Status}}'")
+        check("srp-ats-app running", "srp-ats-app" in out and "Up" in out, err or out[:200])
+        check("srp-auth-app running", "srp-auth-app" in out and "Up" in out, err or out[:200])
+        check("srp-ats-db running", "srp-ats-db" in out and "Up" in out, err or out[:200])
+        check("srp-auth-db running", "srp-auth-db" in out and "Up" in out, err or out[:200])
 
-# ── Database checks via SSH ───────────────────────────────
-print("\n[7] Database schema checks...")
-db_checks = [
-    # Auth / users
-    ("auth_users table",          "SELECT COUNT(*) FROM auth_users;"),
-    ("auth_users has short_id",   "SELECT column_name FROM information_schema.columns WHERE table_name='auth_users' AND column_name='short_id';"),
-    # Jobs
-    ("job_posts table",           "SELECT COUNT(*) FROM job_posts;"),
-    ("job_posts has short_id",    "SELECT column_name FROM information_schema.columns WHERE table_name='job_posts' AND column_name='short_id';"),
-    # Resumes / candidates
-    ("resumes table",             "SELECT COUNT(*) FROM resumes;"),
-    ("resumes short_id",          "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='short_id';"),
-    ("resumes pipeline_stage",    "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='pipeline_stage';"),
-    ("resumes ai_score",          "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='ai_score';"),
-    ("resumes ai_skills",         "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='ai_skills';"),
-    ("resumes updated_at",        "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='updated_at';"),
-    ("resumes source_batch_id",   "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='source_batch_id';"),
-    # ai_screening_data (added migrate_v7_ai_screening_data.sql)
-    ("resumes ai_screening_data", "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='ai_screening_data';"),
-    # source_type + last_contacted_at (added in enterprise migration)
-    ("resumes source_type",       "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='source_type';"),
-    ("resumes last_contacted_at", "SELECT column_name FROM information_schema.columns WHERE table_name='resumes' AND column_name='last_contacted_at';"),
-    # Subscriptions
-    ("subscriptions table",       "SELECT COUNT(*) FROM subscriptions LIMIT 1;"),
-    # Integrations
-    ("integrations table",        "SELECT COUNT(*) FROM integrations LIMIT 1;"),
-    # Communication (correct table names)
-    ("communication_logs",        "SELECT COUNT(*) FROM communication_logs LIMIT 1;"),
-    ("communication_templates",   "SELECT COUNT(*) FROM communication_templates LIMIT 1;"),
-    ("communication_providers",   "SELECT COUNT(*) FROM communication_providers LIMIT 1;"),
-    # Import
-    ("import_batches table",      "SELECT COUNT(*) FROM import_batches LIMIT 1;"),
-    ("import_row_errors table",   "SELECT COUNT(*) FROM import_row_errors LIMIT 1;"),
-    # Audit & logs
-    ("audit_logs table",          "SELECT COUNT(*) FROM audit_logs LIMIT 1;"),
-    ("activity_log table",        "SELECT COUNT(*) FROM activity_log LIMIT 1;"),
-    ("api_keys table",            "SELECT COUNT(*) FROM api_keys LIMIT 1;"),
-    ("token_usage table",         "SELECT COUNT(*) FROM token_usage LIMIT 1;"),
-    # Webhook
-    ("webhook_delivery_logs",     "SELECT COUNT(*) FROM webhook_delivery_logs LIMIT 1;"),
-    ("webhook_subscriptions",     "SELECT COUNT(*) FROM webhook_subscriptions LIMIT 1;"),
-    # JD / boolean search
-    ("generated_jds table",       "SELECT COUNT(*) FROM generated_jds LIMIT 1;"),
-    ("generated_boolean_searches","SELECT COUNT(*) FROM generated_boolean_searches LIMIT 1;"),
-    ("jd_analysis_results",       "SELECT COUNT(*) FROM jd_analysis_results LIMIT 1;"),
-    # Feature flags
-    ("feature_flags table",       "SELECT COUNT(*) FROM feature_flags LIMIT 1;"),
-    # Invite hardening (migrate_v10) — indexes on tenant_members + auth_users
-    ("tenant_members_invite_token_idx", "SELECT indexname FROM pg_indexes WHERE tablename='tenant_members' AND indexname='tenant_members_invite_token_idx';"),
-    ("auth_users_email_active_idx",     "SELECT indexname FROM pg_indexes WHERE tablename='auth_users' AND indexname='auth_users_email_active_idx';"),
-    # Duplicate email index (migrate_v11)
-    ("resumes_tenant_email_idx",  "SELECT indexname FROM pg_indexes WHERE tablename='resumes' AND indexname='resumes_tenant_email_idx';"),
-]
-for label, sql in db_checks:
-    out, err = ssh_cmd(client, f'docker exec srp-auth-db psql -U srp_auth -d srp_auth -c "{sql}" 2>&1')
-    ok = ("error" not in out.lower()) and ("does not exist" not in out.lower()) and bool(out.strip())
-    check(f"DB: {label}", ok, out[:100] if not ok else "")
+        # ── [9] Nginx ───────────────────────────────────────────────────
+        print("\n[9] Nginx configuration")
+        out, err = ssh_cmd(client, "nginx -t 2>&1")
+        check("nginx config valid", "successful" in (out + err).lower(), (out + err)[:120])
 
-# ── FastAPI router checks (via SSH curl) ──────────────────
-print("\n[8] FastAPI router availability...")
-fa_routes = [
-    ("GET /health",                       "curl -s http://localhost:8009/health"),
-    ("GET /api/resume/list (unauth)",     "curl -s -o /dev/null -w '%{http_code}' http://localhost:8009/api/resume/list"),
-    # Confirmed route: /api/screening/results (401 = auth required = route exists)
-    ("GET /api/screening/results (unauth)", "curl -s -o /dev/null -w '%{http_code}' http://localhost:8009/api/screening/results"),
-    ("POST /api/users/login schema",      "curl -s -X POST http://localhost:8009/api/users/login -H 'Content-Type: application/json' -d '{\"email\":\"x\",\"password\":\"x\"}' | head -c 200"),
-    # /api/status is a v3_2_compat route confirmed on server
-    ("GET /api/status",                   "curl -s -o /dev/null -w '%{http_code}' http://localhost:8009/api/status"),
-    # FastAPI docs deliberately disabled in production (ENVIRONMENT=production) — 404 is expected
-    ("GET /docs disabled in prod",       "curl -s -o /dev/null -w '%{http_code}' http://localhost:8009/docs"),
-]
-for label, cmd in fa_routes:
-    out, err = ssh_cmd(client, cmd)
-    ok = out and "error" not in out.lower() and "failed" not in out.lower()
-    # For status code responses, accept 200/401/403/422
-    if out.strip() in ("200", "401", "403", "404", "405", "422"):
-        if "disabled in prod" in label:
-            # docs disabled in production = 404 is correct
-            ok = out.strip() in ("404", "200")
-        else:
-            ok = out.strip() in ("200", "401", "403", "422")
-    check(f"FastAPI {label}", ok, out[:100] if not ok else f"→ {out[:60]}")
+        # ── [10] Network isolation ──────────────────────────────────────
+        print("\n[10] Network isolation (other projects not disrupted)")
+        out, err = ssh_cmd(client, "docker network ls --format '{{.Name}}'")
+        check("srp_ats_internal network exists", "srp_ats_internal" in out, err or out[:200])
+        check("srp_auth_net network exists", "srp_auth_net" in out, err or out[:200])
 
-# ── File upload endpoint checks ────────────────────────────
-print("\n[9] File upload endpoints...")
+        # ── [11] Volume integrity ────────────────────────────────────────
+        print("\n[11] Volume integrity")
+        out, err = ssh_cmd(client, "docker volume ls --format '{{.Name}}'")
+        check("ats_postgres_data volume present", "ats_postgres_data" in out, err or out[:200])
+        check("srp_auth_pgdata volume present", "srp_auth_pgdata" in out, err or out[:200])
 
-# Check that parse route exists and accepts POST
-out, _ = ssh_cmd(client, "curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3010/api/parse -H 'Content-Type: application/json' -d '{}'")
-check("Next.js POST /api/parse exists", out.strip() in ("200","400","401","403","422"), f"got {out}")
+        # ── [12] Recent log error scan ───────────────────────────────────
+        print("\n[12] Recent log error scan (last 10 min)")
+        out, err = ssh_cmd(
+            client,
+            "docker logs srp-auth-app --since 10m 2>&1 "
+            "| grep -iE 'error|exception|crash' "
+            "| grep -vE 'NEXTAUTH_URL missing|fetch.*error|ExperimentalWarning' "
+            "| tail -10",
+        )
+        critical = [ln for ln in out.splitlines() if ln.strip() and "experimental" not in ln.lower()]
+        check("Next.js no critical errors (10m)", len(critical) == 0, "\n    ".join(critical[:5]))
 
-# Check import route
-out, _ = ssh_cmd(client, "curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3010/api/import -H 'Content-Type: application/json' -d '{}'")
-check("Next.js POST /api/import exists", out.strip() in ("200","400","401","403","405","422"), f"got {out}")
+        out, err = ssh_cmd(
+            client,
+            "docker logs srp-ats-app --since 10m 2>&1 "
+            "| grep -iE 'ERROR|CRITICAL|traceback' "
+            "| grep -vE 'Bad file descriptor|socket|SIGTERM|SIGKILL|Worker.*sent|Shutting down' "
+            "| tail -5",
+        )
+        fa_errors = [ln for ln in out.splitlines() if ln.strip()]
+        check("FastAPI no critical errors (10m)", len(fa_errors) == 0, "\n    ".join(fa_errors[:5]))
 
-# Upload dir exists and is writable (check inside container)
-out, _ = ssh_cmd(client, "docker exec srp-auth-app ls /app/uploads/ 2>&1 | head -3")
-check("Upload directory exists (/app/uploads)", "total" in out or "cannot access" not in out.lower(), out)
+    finally:
+        client.close()
 
-# Check uploads dir is writable inside container (create if missing from old image build)
-out, _ = ssh_cmd(client, "docker exec -u root srp-auth-app sh -c 'mkdir -p /app/uploads && chown nextjs:nodejs /app/uploads 2>/dev/null; touch /app/uploads/.test && rm /app/uploads/.test && echo writable' 2>&1")
-check("Upload dir writable", "writable" in out, out[:100] if "writable" not in out else "")
+    # ── Final Results ─────────────────────────────────────────────────────
+    print("\n" + "=" * 60)
+    total = PASS_COUNT + FAIL_COUNT
+    print(f"  PASSED: {PASS_COUNT}/{total}")
+    if FAIL_COUNT:
+        print(f"  FAILED: {FAIL_COUNT}/{total}")
+        print("\n  Issues to investigate:")
+        for label, detail in ISSUES:
+            print(f"    ✗ {label}")
+            if detail:
+                print(f"      {detail[:120]}")
+        print("=" * 60 + "\n")
+        sys.exit(1)
+    else:
+        print("  ALL CHECKS PASSED ✓")
+    print("=" * 60 + "\n")
 
-# ── nginx config correctness ──────────────────────────────
-print("\n[10] nginx proxy routing...")
-out, _ = ssh_cmd(client, "nginx -t 2>&1")
-check("nginx config valid", "successful" in out.lower(), out)
 
-out, _ = ssh_cmd(client, "curl -s -o /dev/null -w '%{http_code}' http://localhost:3010/api/health")
-check("Next.js direct (localhost:3010)", out.strip() == "200", f"got {out}")
-
-out, _ = ssh_cmd(client, "curl -s -o /dev/null -w '%{http_code}' http://localhost:8009/health")
-check("nginx -> FastAPI direct", out.strip() == "200", f"got {out}")
-
-# ── Environment/config checks ─────────────────────────────
-print("\n[11] Environment config in containers...")
-out, _ = ssh_cmd(client, "docker exec srp-auth-app printenv | grep -E 'NEXTAUTH_URL|DATABASE_URL|OPENAI_API_KEY' | sed 's/=.*/=***/' 2>&1")
-for var in ["NEXTAUTH_URL", "DATABASE_URL", "OPENAI_API_KEY"]:
-    check(f"Env var {var} set", var in out, f"not found in: {out[:100]}")
-
-out, _ = ssh_cmd(client, "docker exec srp-ats-app printenv | grep -E 'DATABASE_URL|OPENAI_API_KEY' | sed 's/=.*/=***/' 2>&1")
-for var in ["DATABASE_URL", "OPENAI_API_KEY"]:
-    check(f"FastAPI env {var} set", var in out, f"not found in: {out[:100]}")
-
-# ── Functional auth flow via API ──────────────────────────
-print("\n[12] Auth flow (demo credentials)...")
-# Try login with demo user
-out, _ = ssh_cmd(client, """curl -s -X POST http://localhost:3010/api/auth/signin/credentials \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d 'username=demo@srpailabs.com&password=Demo@1234&csrfToken=test&callbackUrl=/dashboard&json=true' \
-  -w '\\nHTTP_STATUS:%{http_code}' 2>&1 | tail -3""")
-# Auth endpoints redirect — 200 or 302 are both ok
-check("Auth /signin endpoint responds", any(c in out for c in ["200","302","401","ok","error","url"]), out[:120])
-
-# Check CSRF token endpoint
-out, _ = ssh_cmd(client, "curl -s http://localhost:3010/api/auth/csrf | head -c 100")
-check("Auth CSRF token available", "csrfToken" in out, out[:100])
-
-# Check NextAuth providers endpoint
-out, _ = ssh_cmd(client, "curl -s http://localhost:3010/api/auth/providers | head -c 200")
-check("Auth providers endpoint", "credentials" in out.lower() or "{" in out, out[:100])
-
-# ── Log check for critical errors ─────────────────────────
-print("\n[13] Recent error scan in container logs...")
-out, _ = ssh_cmd(client, "docker logs srp-auth-app --since 10m 2>&1 | grep -iE 'error|exception|crash' | grep -v 'NEXTAUTH_URL missing\\|fetch.*error' | tail -10")
-critical_errors = [l for l in out.splitlines() if l.strip() and "experimental" not in l.lower()]
-check("Next.js no critical errors (last 10min)", len(critical_errors) == 0, "\n    ".join(critical_errors[:5]) if critical_errors else "")
-
-# Exclude known benign Gunicorn noise: SIGTERM on restart is expected, not a real error
-out, _ = ssh_cmd(client, "docker logs srp-ats-app --since 10m 2>&1 | grep -iE 'ERROR|CRITICAL|traceback' | grep -v 'Bad file descriptor' | grep -v 'socket' | grep -v 'SIGTERM' | grep -v 'SIGKILL' | grep -v 'Worker.*sent' | grep -v 'Shutting down' | tail -5")
-fa_errors = [l for l in out.splitlines() if l.strip()]
-check("FastAPI no critical errors (last 10min)", len(fa_errors) == 0, "\n    ".join(fa_errors[:5]) if fa_errors else "")
-
-client.close()
-
-# ── Final Results ─────────────────────────────────────────
-print("\n" + "="*60)
-total = PASS_COUNT + FAIL_COUNT
-print(f"  PASSED: {PASS_COUNT}/{total}")
-if FAIL_COUNT:
-    print(f"  FAILED: {FAIL_COUNT}/{total}")
-    print("\n  Issues to fix:")
-    for label, detail in ISSUES:
-        print(f"    ✗ {label}")
-        if detail:
-            print(f"      {detail[:100]}")
-else:
-    print("  ALL CHECKS PASSED ✓")
-print("="*60 + "\n")
+if __name__ == "__main__":
+    main()

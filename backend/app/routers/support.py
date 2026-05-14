@@ -9,7 +9,7 @@ from typing import Optional
 
 from app.database.connection import get_db
 from app.schemas import SupportTicketCreate, SupportTicketResponse
-from app.auth.dependencies import get_optional_user, get_current_admin_user
+from app.auth.dependencies import get_optional_user, get_current_admin_user, get_current_user
 from app.models.user import User
 from app.models.support import SupportTicket
 
@@ -49,17 +49,11 @@ async def create_support_ticket(
 
 @router.get("/tickets")
 async def list_user_tickets(
-    current_user: User = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     limit: int = 10
 ):
     """List support tickets for current user"""
-    if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required to view tickets"
-        )
-    
     tickets = db.query(SupportTicket).filter(
         SupportTicket.user_id == current_user.id
     ).order_by(SupportTicket.created_at.desc()).limit(limit).all()

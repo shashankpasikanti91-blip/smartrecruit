@@ -68,7 +68,7 @@ class CommunicationLog(Base):
     retry_count     = Column(Integer, default=0)
     resource_type   = Column(String(60), nullable=True)
     resource_id     = Column(String(80), nullable=True)
-    metadata        = Column(JSON, default=dict)
+    event_metadata  = Column("metadata", JSON, default=dict)
     sent_at         = Column(DateTime(timezone=True), nullable=True)
     delivered_at    = Column(DateTime(timezone=True), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now(), index=True)

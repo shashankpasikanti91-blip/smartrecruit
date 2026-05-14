@@ -83,7 +83,7 @@ async def logout(
     return AuthService.logout_user(db, current_user.id, token)
 
 
-@router.post("/forgot-password", response_model=dict)
+@router.post("/forgot-password", response_model=MessageResponse)
 async def forgot_password(
     request: PasswordResetRequest,
     db: Session = Depends(get_db)

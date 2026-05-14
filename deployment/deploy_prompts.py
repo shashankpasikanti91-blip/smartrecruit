@@ -1,40 +1,47 @@
-import paramiko, os
+#!/usr/bin/env python3
+"""Upload `system_prompts.txt` to a remote FastAPI deployment."""
 
-HOST='5.223.67.236'; USER='root'; PASS='856Reey@nsh'
-LOCAL_FILE = r'C:\Users\User\Desktop\SRP Smartrecruit\backend\system_prompts.txt'
+from __future__ import annotations
 
-client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(HOST, username=USER, password=PASS, timeout=30)
+from pathlib import Path
+import os
 
-print('Connected to server')
+from remote_config import load_remote_config, open_ssh_client
 
-# Upload the new system_prompts.txt to both known paths
-sftp = client.open_sftp()
 
-# Find the FastAPI app dir
-_,s,_ = client.exec_command('find /opt -name "system_prompts.txt" 2>/dev/null')
-paths = s.read().decode().strip().split('\n')
-print('Found paths:', paths)
+def main() -> None:
+    config = load_remote_config()
+    local_file = Path(os.getenv("SRP_LOCAL_PROMPTS_FILE", Path(__file__).resolve().parents[1] / "backend" / "system_prompts.txt"))
+    if not local_file.is_file():
+        raise FileNotFoundError(f"Local prompts file not found: {local_file}")
 
-for path in paths:
-    if path.strip():
-        sftp.put(LOCAL_FILE, path.strip())
-        print(f'Uploaded to {path.strip()}')
+    client = open_ssh_client(config)
+    try:
+        print("Connected to server")
+        sftp = client.open_sftp()
+        remote_path = f"{config.project_dir}/backend/system_prompts.txt"
+        try:
+            sftp.put(str(local_file), remote_path)
+            print(f"Uploaded prompts to {remote_path}")
+        finally:
+            sftp.close()
 
-sftp.close()
+        _, stdout, stderr = client.exec_command(
+            f"cd {config.project_dir} && docker compose restart app 2>&1 && echo RESTART_OK",
+            timeout=60,
+        )
+        print("Restart:\n", stdout.read().decode(errors="replace") + stderr.read().decode(errors="replace"))
 
-# Restart the FastAPI service to reload the prompts
-_,s,e = client.exec_command('cd /opt/srp-ats && docker compose restart app 2>&1 && echo RESTART_OK')
-print('Restart:\n', s.read().decode() + e.read().decode())
+        _, stdout, _ = client.exec_command(
+            f"sleep 5 && curl -s http://127.0.0.1:{config.app_port}/health",
+            timeout=30,
+        )
+        print("FastAPI health:", stdout.read().decode(errors="replace").strip())
+    finally:
+        client.close()
 
-# Verify new content is loaded
-_,s,_ = client.exec_command("grep -c 'World-Class' " + paths[0] if paths and paths[0].strip() else "echo 'no path'")
-print('World-Class count in file (should be 2):', s.read().decode().strip())
+    print("Done")
 
-# Quick health check
-_,s,_ = client.exec_command('sleep 5 && curl -s http://127.0.0.1:8009/health')
-print('FastAPI health:', s.read().decode().strip())
 
-client.close()
-print('Done')
+if __name__ == "__main__":
+    main()

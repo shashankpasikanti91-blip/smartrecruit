@@ -7,14 +7,14 @@ Wants=postgresql.service
 Type=notify
 User=www-data
 Group=www-data
-WorkingDirectory=/opt/srp-smartrecruit
+WorkingDirectory=/opt/srp-ats
 
 # Load environment variables
-EnvironmentFile=/opt/srp-smartrecruit/.env
+EnvironmentFile=/opt/srp-ats/.env
 
 # Use gunicorn with uvicorn worker for production
-ExecStart=/opt/srp-smartrecruit/.venv/bin/gunicorn \
-    -c /opt/srp-smartrecruit/gunicorn.conf.py \
+ExecStart=/opt/srp-ats/.venv/bin/gunicorn \
+    -c /opt/srp-ats/gunicorn.conf.py \
     app.main:app
 
 # Restart policy
@@ -30,11 +30,11 @@ LimitNOFILE=65536
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
-ReadWritePaths=/opt/srp-smartrecruit/uploads /opt/srp-smartrecruit/logs
+ReadWritePaths=/opt/srp-ats/uploads /opt/srp-ats/logs
 
 # Logging
-StandardOutput=append:/opt/srp-smartrecruit/logs/app.log
-StandardError=append:/opt/srp-smartrecruit/logs/error.log
+StandardOutput=append:/opt/srp-ats/logs/app.log
+StandardError=append:/opt/srp-ats/logs/error.log
 
 [Install]
 WantedBy=multi-user.target

@@ -39,6 +39,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
@@ -47,29 +54,31 @@ async def lifespan(app: FastAPI):
     init_db()
     logger.info("✅ Database initialized")
     
-    # Seed demo user if it doesn't exist
-    try:
-        from app.database.connection import SessionLocal
-        from app.models.user import User
-        from app.auth.utils import hash_password
-        db = SessionLocal()
-        demo = db.query(User).filter(User.email == "demo@srp.com").first()
-        if not demo:
-            demo = User(
-                email="demo@srp.com",
-                hashed_password=hash_password("Demo@1234"),
-                role="user",
-                is_active=True,
-                is_verified=True
-            )
-            db.add(demo)
-            db.commit()
-            logger.info("✅ Demo user created (demo@srp.com / Demo@1234)")
-        else:
-            logger.info("✅ Demo user already exists")
-        db.close()
-    except Exception as e:
-        logger.warning(f"⚠️ Could not seed demo user: {e}")
+    if _env_flag("SEED_DEMO", default=False):
+        try:
+            from app.database.connection import SessionLocal
+            from app.models.user import User
+            from app.auth.utils import hash_password
+            db = SessionLocal()
+            demo = db.query(User).filter(User.email == "demo@srp.com").first()
+            if not demo:
+                demo = User(
+                    email="demo@srp.com",
+                    hashed_password=hash_password("Demo@1234"),
+                    role="user",
+                    is_active=True,
+                    is_verified=True
+                )
+                db.add(demo)
+                db.commit()
+                logger.warning("Demo user created because SEED_DEMO=true is enabled.")
+            else:
+                logger.info("Demo user already exists")
+            db.close()
+        except Exception as e:
+            logger.warning(f"Could not seed demo user: {e}")
+    else:
+        logger.info("Demo user seeding is disabled.")
     
     yield
     # Shutdown
@@ -79,6 +88,7 @@ async def lifespan(app: FastAPI):
 # Initialize FastAPI app
 _env = os.getenv("ENVIRONMENT", "development").lower()
 _is_prod = _env in ("production", "prod")
+_legacy_routes_enabled = _env_flag("ENABLE_LEGACY_COMPAT_ROUTES", default=not _is_prod)
 
 app = FastAPI(
     title="SRP SmartRecruit v3.2",
@@ -174,8 +184,6 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-if UPLOADS_DIR.exists():
-    app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 
 # Root endpoint — serve landing page
@@ -206,6 +214,7 @@ async def health_check():
         "version": "3.2.0",
         "environment": _env,
         "database": "connected" if db_ok else "unreachable",
+        "legacy_routes_enabled": _legacy_routes_enabled,
     }
 
 
@@ -217,7 +226,10 @@ async def app_redirect():
 
 
 # Include routers
-app.include_router(v3_2_compat.router)  # v3.2 compatibility endpoints FIRST
+if _legacy_routes_enabled:
+    app.include_router(v3_2_compat.router)
+else:
+    logger.info("Legacy v3 compatibility routes are disabled.")
 app.include_router(auth.router)
 app.include_router(resume.router)
 app.include_router(screening.router)
