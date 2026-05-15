@@ -1,5 +1,5 @@
 # SRP SmartRecruit - recruit.srpailabs.com
-# Next.js Auth frontend on :3010, FastAPI ATS backend on :8009
+# Next.js (SmartRecruit) on :3010, FastAPI AI backend on :8009
 
 limit_req_zone $binary_remote_addr zone=ats_api:10m rate=10r/s;
 limit_req_zone $binary_remote_addr zone=ats_auth:10m rate=3r/s;
@@ -29,9 +29,9 @@ server {
     add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
     client_max_body_size 15M;
 
-    # ── NextAuth (Google OAuth) --> Next.js :3010
-    # MUST appear before the general /api/ block (regex beats prefix in nginx)
-    location ~ ^/api/auth/(providers|session|csrf|callback|signin|signout|error)(/.*)?$ {
+    # ── NextAuth + Next.js auth routes --> Next.js :3010
+    # MUST appear before the general /api/auth/ block (regex beats prefix in nginx)
+    location ~ ^/api/auth/(providers|session|csrf|callback|signin|signout|error|forgot-password|reset-password|signup|me)(/.*)?$ {
         proxy_pass http://127.0.0.1:3010;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

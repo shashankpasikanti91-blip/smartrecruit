@@ -1,7 +1,7 @@
 # SRP SmartRecruit — AI-Powered ATS
 
 **Live:** https://recruit.srpailabs.com  
-**Primary checked-in stack:** FastAPI · PostgreSQL · Docker · Jinja/static frontend assets
+**Stacks in repo:** **Next.js** app (`nextjs-auth/`) — primary production dashboard + APIs · **FastAPI** (`backend/`) — AI services and optional legacy flows
 
 AI-powered Applicant Tracking System for sourcing, screening, tracking, and hiring talent.
 
@@ -9,11 +9,16 @@ AI-powered Applicant Tracking System for sourcing, screening, tracking, and hiri
 
 ## Repository Scope
 
-This checkout is primarily the **FastAPI ATS backend** plus static/template frontend assets and deployment helpers.
+This repository contains **two** production-relevant stacks:
 
-- The repository **does not contain** the separate Next.js/auth app referenced in some legacy deployment notes.
-- Current data isolation in this backend is **user-level ownership** (`user_id` scoping), not a full organization/tenant model.
-- Production deployments should keep legacy compatibility routes disabled unless they are explicitly needed.
+1. **`nextjs-auth/`** — Next.js 16 app: dashboard, NextAuth, PostgreSQL-backed APIs (`/api/*`), multi-tenant guards, AI screening persistence, and the live site **https://recruit.srpailabs.com** when deployed as the primary app.
+2. **`backend/`** — FastAPI service used for additional AI workflows (JD generation, boolean search, etc., depending on deployment).
+
+The root **docker-compose** paths and nginx config may point at either stack depending on how the server is provisioned. SQL migrations that power the Next.js app live under **`nextjs-auth/db/`** and must be applied to the **same** database referenced by `nextjs-auth`’s `DATABASE_URL`.
+
+The FastAPI layer uses **user-level** ownership in its own models where those routes are used; the **Next.js** app is the source of truth for **tenant** scoping via `tenant_id` and `requireTenant()` on `/api/*`.
+
+This repository is **SmartRecruit only** (`nextjs-auth/`, `backend/`, `deployment/`, shared SQL under `nextjs-auth/db/`). Do not add unrelated vendored application trees here — they bloat clones, confuse onboarding, and duplicate secrets surface area.
 
 ---
 
@@ -32,7 +37,7 @@ This checkout is primarily the **FastAPI ATS backend** plus static/template fron
 | **Boolean Search** | Advanced sourcing query builder |
 | **Candidate Tracker** | Filter by stage, match, job, skill, date. Source + phone visible |
 | **Job Filter** | Filter jobs by status (Active/Closed/Draft) and type (Full-time/Contract/Remote/…) |
-| **User Isolation** | Current backend scopes owned ATS records by `user_id`; this repo does not yet implement an org/team tenant model |
+| **Tenant isolation** | Next.js APIs scope data by `tenant_id` (`requireTenant()`). FastAPI models may still use `user_id` where that service is wired in |
 | **Session Security** | Single-session login, explicit logout invalidation, and stricter optional-auth checks |
 | **Google OAuth** | One-click sign-in via NextAuth + Google Cloud |
 | **Owner Panel** | Admin view — users, activity log, token usage, subscriptions |
@@ -46,19 +51,22 @@ This checkout is primarily the **FastAPI ATS backend** plus static/template fron
 
 ## Architecture
 
+Typical production for **https://recruit.srpailabs.com**: HTTPS terminates at nginx, which proxies to the **Next.js** app (dashboard + `/api/*` on the Node port you configure, often **3000** in Docker). The **FastAPI** service may run on a separate port (e.g. **8009**) for AI helpers and legacy flows, depending on your compose/nginx layout.
+
 ```
 Internet
    │
    ▼
 nginx (HTTPS — recruit.srpailabs.com)
-   └── / → FastAPI :8009  (landing page + ATS APIs in this repo)
+   ├── /  → Next.js (nextjs-auth) — primary UI + tenant-scoped /api/*
+   └── (optional) /ai or upstream → FastAPI :8009 — JD/boolean/screen helpers as deployed
 
-Docker Compose (docker-compose.yml)
-   ├── srp-ats-app     — FastAPI (Python 3.11)
-   └── srp-ats-db      — PostgreSQL 16
+Docker Compose (docker-compose.yml / docker-compose.dev.yml)
+   ├── Next.js or FastAPI app container(s) — see compose files in this repo
+   └── PostgreSQL 16
+```
 
 Optional external services may exist in production, but they are not part of this checkout.
-```
 
 ---
 
@@ -100,7 +108,9 @@ srp-smartrecruit/
 │   │   ├── validate.ts       # Input sanitization + validation
 │   │   ├── limits.ts         # Plan-based rate limits
 │   │   └── audit.ts          # Audit log helpers
-│   ├── db/                   # SQL migrations (run in order v2→v9)
+│   ├── db/                   # SQL migrations (run in order v2→v11; see root README)
+│   ├── e2e/                  # Playwright E2E — `npm run test:e2e` (see nextjs-auth/README)
+│   ├── playwright.config.ts
 │   └── .env.local            # Local env — NEVER commit
 │
 ├── backend/                  # FastAPI AI backend
@@ -242,8 +252,9 @@ migrate_v8_multitenant.sql      → Tenant isolation
 migrate_v8b_patch.sql           → Tenant patch
 migrate_v8c_final.sql           → API keys, audit columns, token_usage tenant_id
 migrate_v9_prod_fix.sql         → Production fixes
-migrate_v10_invite_hardening.sql → Invite token hashing + expiry
-migrate_v11_dup_index.sql       → Partial unique index on (tenant_id, candidate_email)
+migrate_v10_invite_hardening.sql → Invite token indexing + cleanup
+migrate_v10_candidate_record_optional_jd.sql → candidate_profile JSONB + optional_requirements on jobs
+migrate_v11_dup_index.sql       → Index on (tenant_id, candidate_email) for duplicate checks
 ```
 
 ---

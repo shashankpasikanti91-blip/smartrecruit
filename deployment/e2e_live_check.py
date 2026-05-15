@@ -11,6 +11,7 @@ BASE = "https://recruit.srpailabs.com"
 
 CHECKS = [
     ("/health",              [200]),
+    ("/api/health",          [200]),
     ("/",                    [200, 307, 308]),
     ("/login",               [200, 307, 308]),
     ("/signup",              [200, 307, 308]),
@@ -26,7 +27,7 @@ passed = 0
 failed = 0
 failures = []
 
-print(f"\nLive E2E → {BASE}\n")
+print(f"\nLive E2E -> {BASE}\n")
 
 for path, expected in CHECKS:
     code = None
