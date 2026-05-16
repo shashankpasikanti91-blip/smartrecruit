@@ -58,7 +58,42 @@
 
 ## ✅ Recently Completed
 
-### Deploy v5.1 Enterprise to Production
+### Phase UI-2: Candidate Table + Drawer Overhaul
+- [x] Candidate table: 11-col slim layout (no horizontal overflow at 100% zoom)
+- [x] Email visible in own "Contact" column (`text-slate-700`)
+- [x] Candidate popup → full right-side drawer (720px, full height, single scroll)
+- [x] Tab scroll fixed (no nested scroll boxes)
+- [x] Resume tab: download bar + PDF iframe (65vh) + "no file stored" fallback
+- [x] KPI hero bar: each stat uniquely colored (indigo/amber/purple/emerald/green/sky)
+- [x] Profile tab: 20-field card grid (all requested fields visible)
+- [x] ATS record tab: sectioned form with Employment, Experience, Compensation, Visa, IDs
+- [x] EMPTY_RECORD expanded: +7 new fields (`preferred_location`, `total_experience`, `relevant_experience`, `current_salary`, `expected_salary`, `passport_number`, `pf_number`)
+
+### Phase Data-3: Resume Storage + AI Score Persistence (Audit Confirmed)
+- [x] AI screening results always saved to DB on every screen call (screen/route.ts)
+- [x] Resume file always stored: POST /api/candidates/[id]/resume-file saved to disk + DB path
+- [x] Tenant isolation: requireTenant() used on ALL candidate/job API routes
+- [x] resume_original_path served at GET /api/candidates/[id]/resume-file?inline=1 (PDF viewer)
+
+### Phase Jobs-1: Job ↔ Candidate Full Integration
+- [x] **`rejected` pipeline stage** added to PIPELINE_STAGES + STAGE_LIGHT (UI + API already supported it)
+- [x] **Job Detail Drawer** (`JobDetailDrawer` component):
+  - Opens when clicking any job row in the Jobs table
+  - Shows job header (title, company, location, type, status)
+  - Inline job status change (Active/Closed/Draft) — calls new `PATCH /api/jobs/[id]`
+  - Pipeline funnel: stage counts (Sourced/Applied/Screening/Interview/Offer/Hired/Rejected) for this job only
+  - Candidate list: name+email, inline stage dropdown (changes immediately), match badge, added date, View button
+  - Empty state with guidance when no candidates linked yet
+  - "JD / Posts" button → opens existing social posts generator
+- [x] **Jobs table columns**: Candidates cell now shows count + mini stage badges (A:3 S:1 I:2 etc.), all clickable to open Job Detail Drawer
+- [x] **Candidates table Stage cell**: Stage pill → inline `<select>` dropdown (stop propagation), changes stage immediately without opening drawer
+- [x] **Candidates table Job column**: Job title → clickable link → opens Job Detail Drawer
+- [x] **New API: `PATCH /api/jobs/[id]`** — update job status/title/description/requirements/location/company (tenant-scoped, audit-logged)
+- [x] **New API: `DELETE /api/jobs/[id]`** — soft-delete (sets status=archived, tenant-scoped, audit-logged)
+- [x] `changeJob` fn now also triggers `selectedJobView` re-render to keep job drawer in sync
+
+## 🔄 In Progress
+## ❌ Backlog / Next Sprint
 - [x] Deploy updated nextjs-auth build to production (Hetzner 5.223.67.236)
 - [x] E2E smoke test after deploy — ALL 6 CHECKS PASSED
 - [x] Fix `/app` route serving old Jinja2 `dashboard_v3_2.html` — now 301 → `/dashboard` (Next.js)
